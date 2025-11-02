@@ -11,7 +11,7 @@ import (
 	_ "github.com/tliron/commonlog/simple"
 )
 
-const lsName = "my language"
+const lsName = "hurl_ls"
 
 var (
 	version string = "0.0.1"
@@ -19,19 +19,29 @@ var (
 )
 
 func main() {
-	// This increases logging verbosity (optional)
 	commonlog.Configure(1, nil)
 
 	handler = protocol.Handler{
-		Initialize:  initialize,
-		Initialized: initialized,
-		Shutdown:    shutdown,
-		SetTrace:    setTrace,
+		Initialize:             initialize,
+		Initialized:            initialized,
+		Shutdown:               shutdown,
+		SetTrace:               setTrace,
+		TextDocumentCompletion: completion,
 	}
 
 	server := server.NewServer(&handler, lsName, false)
 
 	server.RunStdio()
+}
+
+func completion(context *glsp.Context, params *protocol.CompletionParams) (any, error) {
+	return []protocol.CompletionItem{
+		{
+			Label:      "testing",
+			Kind:       ptr(protocol.CompletionItemKindText),
+			InsertText: ptr(params.TextDocument.URI),
+		},
+	}, nil
 }
 
 func initialize(context *glsp.Context, params *protocol.InitializeParams) (any, error) {
@@ -58,4 +68,8 @@ func shutdown(context *glsp.Context) error {
 func setTrace(context *glsp.Context, params *protocol.SetTraceParams) error {
 	protocol.SetTraceValue(params.Value)
 	return nil
+}
+
+func ptr[T any](v T) *T {
+	return &v
 }
