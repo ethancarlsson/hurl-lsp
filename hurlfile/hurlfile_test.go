@@ -12,9 +12,37 @@ func TestParse(t *testing.T) {
 		hf, err := hurlfile.Parse("file://../fixtures/test.hurl")
 
 		expect.NoErr(t, err)
-		expect.Equals(t, len(hf.Entries), 1)
-		expect.Equals(t, hf.Entries[0].Request.Method, "POST")
-		expect.Equals(t, hf.Entries[0].Request.Target, "{{url}}/people")
+		expect.Equals(t, 1, len(hf.Entries))
+		expect.Equals(t, "POST", hf.Entries[0].Request.Method)
+		expect.Equals(t, "{{url}}/people", hf.Entries[0].Request.Target)
+		expect.Equals(t, 0, hf.Range.StartLine)
+		expect.Equals(t, 8, hf.Range.EndLine)
+	})
+
+	t.Run("partial request", func(t *testing.T) {
+		hf, err := hurlfile.Parse("file://../fixtures/test_partial_req.hurl")
+
+		expect.NoErr(t, err)
+		expect.Equals(t, 2, len(hf.Entries))
+		expect.Equals(t, "PATCH", hf.Entries[0].Request.Method)
+		expect.Equals(t, "", hf.Entries[0].Request.Target)
+		expect.Equals(t, `{ 
+	"hello": "test" 
+}`,
+			hf.Entries[0].Request.Body.Raw)
+
+		expect.Equals(t, 0, hf.Range.StartLine)
+		expect.Equals(t, 7, hf.Range.EndLine)
+
+		expect.Equals(t, 1, hf.Entries[0].Request.Range.StartLine)
+		expect.Equals(t, 5, hf.Entries[0].Request.Range.EndLine)
+
+		expect.Equals(t, 3, hf.Entries[0].Request.Body.Range.StartLine)
+		expect.Equals(t, 0, hf.Entries[0].Request.Body.Range.StartCol)
+		expect.Equals(t, 5, hf.Entries[0].Request.Body.Range.EndLine)
+
+		expect.Equals(t, 6, hf.Entries[1].Range.StartLine)
+		expect.Equals(t, 6, hf.Entries[1].Range.EndLine)
 	})
 
 	t.Run("file doesn't exist", func(t *testing.T) {

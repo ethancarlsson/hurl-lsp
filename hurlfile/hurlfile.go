@@ -30,42 +30,55 @@ func Parse(uri string) (*HurlFile, error) {
 }
 
 // AST structures
-
 type HurlFile struct {
-	Entries []Entry `json:"entries"`
+	Entries []Entry
+	Range   SourceRange
+}
+
+type SourceRange struct {
+	StartLine int
+	StartCol  int
+	EndLine   int
+	EndCol    int
 }
 
 type Entry struct {
-	Request  Request   `json:"request"`
-	Response *Response `json:"response,omitempty"`
+	Request  Request
+	Response *Response
+	Range    SourceRange
 }
 
 type Request struct {
-	Method   string            `json:"method"`
-	Target   string            `json:"target"` // value-string (URL or path)
-	Headers  map[string]string `json:"headers,omitempty"`
-	Sections []Section         `json:"sections,omitempty"`
-	Body     string            `json:"body,omitempty"` // raw
-	RawLines []string          `json:"-"`
+	Method   string
+	Target   string
+	Headers  map[string]string
+	Sections []Section
+	Body     Body
+	Range    SourceRange
+}
+
+type Body struct {
+	Raw   string
+	Range SourceRange
 }
 
 type Response struct {
-	Version  string            `json:"version"`
-	Status   int               `json:"status"`
-	Headers  map[string]string `json:"headers,omitempty"`
-	Sections []Section         `json:"sections,omitempty"`
-	Body     string            `json:"body,omitempty"` // raw
-	RawLines []string          `json:"-"`
+	Version  string
+	Status   int
+	Headers  map[string]string
+	Sections []Section
+	Body     string
+	Range    SourceRange
 }
 
 type Section struct {
-	Name      string            `json:"name"`
-	KeyValues map[string]string `json:"key_values,omitempty"`
-	RawLines  []string          `json:"-"`
+	Name      string
+	KeyValues map[string]string
+	Range     SourceRange
+	RawLines  []string
 }
 
 // Parser
-
 type Parser struct {
 	lines []string
 	i     int
@@ -149,6 +162,10 @@ func (p *Parser) Parse() (*HurlFile, error) {
 		// We'll skip unexpected lines to be forgiving.
 		p.i++
 	}
+
+	h.Range.EndCol = len(p.peek())
+	h.Range.EndLine = len(p.lines)
+
 	return h, nil
 }
 
@@ -157,6 +174,7 @@ func (p *Parser) parseEntry() (*Entry, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	// After request, there may be an immediate response block
 	p.skipCommentsAndEmpty()
 	var resp *Response
@@ -170,7 +188,23 @@ func (p *Parser) parseEntry() (*Entry, error) {
 			resp = r
 		}
 	}
-	return &Entry{Request: *req, Response: resp}, nil
+	entry := &Entry{
+		Request:  *req,
+		Response: resp,
+		Range: SourceRange{
+			StartLine: req.Range.StartLine,
+			StartCol:  req.Range.StartCol,
+			EndCol:    req.Range.EndCol,
+			EndLine:   req.Range.EndLine,
+		},
+	}
+
+	if resp != nil {
+		entry.Range.EndCol = resp.Range.EndCol
+		entry.Range.EndLine = resp.Range.EndLine
+	}
+
+	return entry, nil
 }
 
 func (p *Parser) parseRequest() (*Request, error) {
@@ -186,11 +220,21 @@ func (p *Parser) parseRequest() (*Request, error) {
 	if len(parts) > 1 {
 		target = strings.TrimSpace(line[len(method):])
 	}
+
+	startLine := p.i - 1
 	req := &Request{
 		Method:  method,
 		Target:  target,
 		Headers: map[string]string{},
+		Range:   computeLineRange(line, startLine),
 	}
+
+	defer func() {
+		req.Range.EndLine = p.i - 1
+		req.Range.EndCol = len(p.peek())
+		req.Body.Range.EndLine = p.i - 1
+		req.Body.Range.EndCol = len(p.peek())
+	}()
 	// Now parse headers, sections, and body
 	// We'll read until we hit:
 	// - blank line followed by something that doesn't look like a header/section (body start)
@@ -254,6 +298,7 @@ func (p *Parser) parseRequest() (*Request, error) {
 			}
 			nextLine := strings.TrimSpace(p.lines[nextMeaningful])
 			// If the next line is not a header/section/response/method, treat everything from nextMeaningful as body
+			req.Body.Range.StartLine = p.i
 			if !(reHeaderLine.MatchString(nextLine) || reSectionLine.MatchString(nextLine) || reResponseLine.MatchString(nextLine) || reMethodLine.MatchString(nextLine)) {
 				// collect body from nextMeaningful until we hit a line that is a method/response that starts a new entry
 				bodyLines := []string{}
@@ -268,7 +313,8 @@ func (p *Parser) parseRequest() (*Request, error) {
 					bodyLines = append(bodyLines, p.lines[j])
 					p.i = j + 1
 				}
-				req.Body = strings.Join(bodyLines, "\n")
+				req.Body.Raw = strings.Join(bodyLines, "\n")
+
 				return req, nil
 			}
 			// else it's still part of headers/sections - continue loop
@@ -279,6 +325,8 @@ func (p *Parser) parseRequest() (*Request, error) {
 		trimL := strings.TrimLeft(raw, " \t")
 		if len(trimL) > 0 && (strings.HasPrefix(trimL, "{") || strings.HasPrefix(trimL, "[") || strings.HasPrefix(trimL, "`") || strings.HasPrefix(trimL, "```")) {
 			bodyLines := []string{}
+
+			req.Body.Range.StartLine = p.i
 			for j := p.i; j < p.len; j++ {
 				t := strings.TrimSpace(p.lines[j])
 				if reMethodLine.MatchString(t) || reResponseLine.MatchString(t) {
@@ -292,7 +340,9 @@ func (p *Parser) parseRequest() (*Request, error) {
 				bodyLines = append(bodyLines, p.lines[j])
 				p.i = j + 1
 			}
-			req.Body = strings.Join(bodyLines, "\n")
+
+			req.Body.Raw = strings.Join(bodyLines, "\n")
+
 			return req, nil
 		}
 
@@ -314,7 +364,7 @@ func (p *Parser) parseRequest() (*Request, error) {
 				bodyLines = append(bodyLines, p.lines[j])
 				p.i = j + 1
 			}
-			req.Body = strings.Join(bodyLines, "\n")
+			req.Body.Raw = strings.Join(bodyLines, "\n")
 			return req, nil
 		}
 	}
@@ -334,11 +384,20 @@ func (p *Parser) parseResponse() (*Response, error) {
 	if err != nil {
 		statusNum = 0
 	}
+
+	startLine := p.i - 1
 	resp := &Response{
 		Version: version,
 		Status:  statusNum,
 		Headers: map[string]string{},
+		Range:   computeLineRange(line, startLine),
 	}
+
+	defer func() {
+		resp.Range.EndLine = p.i - 1
+		resp.Range.EndCol = len(p.peek())
+	}()
+
 	// parse headers, sections, body similar to request
 	for !p.eof() {
 		raw := p.peek()
@@ -440,9 +499,12 @@ func (p *Parser) parseSection() (*Section, error) {
 	if len(m) > 1 {
 		name = m[1]
 	}
+
+	startLine := p.i - 1
 	sec := &Section{
 		Name:      name,
 		KeyValues: map[string]string{},
+		Range:     computeLineRange(line, startLine),
 	}
 	// Collect following key-value lines until blank or another section / request/response starts
 	for !p.eof() {
@@ -468,6 +530,10 @@ func (p *Parser) parseSection() (*Section, error) {
 		sec.RawLines = append(sec.RawLines, raw)
 		p.i++
 	}
+
+	sec.Range.EndLine = p.i
+	sec.Range.EndCol = len(p.peek())
+
 	return sec, nil
 }
 
@@ -480,4 +546,45 @@ func splitHeader(line string) (string, string) {
 	k := strings.TrimSpace(line[:idx])
 	v := strings.TrimSpace(line[idx+1:])
 	return k, v
+}
+
+func (p *Parser) currentLineNum() int {
+	// 1-based line numbers
+	return p.i + 1
+}
+
+func computeLineRange(line string, lineNum int) SourceRange {
+	start := strings.IndexFunc(line, func(r rune) bool { return !isSpace(r) })
+	if start == -1 {
+		start = 0
+	}
+	end := len(line)
+	return SourceRange{
+		StartLine: lineNum,
+		StartCol:  start + 1,
+		EndLine:   lineNum,
+		EndCol:    end,
+	}
+}
+
+func mergeRanges(r1, r2 SourceRange) SourceRange {
+	if r1.StartLine == 0 {
+		return r2
+	}
+	if r2.StartLine == 0 {
+		return r1
+	}
+	if r2.StartLine < r1.StartLine {
+		r1.StartLine = r2.StartLine
+		r1.StartCol = r2.StartCol
+	}
+	if r2.EndLine > r1.EndLine || (r2.EndLine == r1.EndLine && r2.EndCol > r1.EndCol) {
+		r1.EndLine = r2.EndLine
+		r1.EndCol = r2.EndCol
+	}
+	return r1
+}
+
+func isSpace(r rune) bool {
+	return r == ' ' || r == '\t'
 }
