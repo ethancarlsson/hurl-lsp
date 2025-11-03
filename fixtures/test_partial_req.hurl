@@ -4,4 +4,4 @@ Authorization: Bearer {{jwt}}
 { 
 	"hello": "test" 
 }
-GET https://example.com
+		 GET https://example.com

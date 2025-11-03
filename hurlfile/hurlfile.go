@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 func Parse(uri string) (*HurlFile, error) {
@@ -49,12 +50,22 @@ type Entry struct {
 }
 
 type Request struct {
-	Method   string
-	Target   string
+	Method   Method
+	Target   Target
 	Headers  map[string]string
 	Sections []Section
 	Body     Body
 	Range    SourceRange
+}
+
+type Method struct {
+	Name  string
+	Range SourceRange
+}
+
+type Target struct {
+	Target string
+	Range  SourceRange
 }
 
 type Body struct {
@@ -209,7 +220,8 @@ func (p *Parser) parseEntry() (*Entry, error) {
 
 func (p *Parser) parseRequest() (*Request, error) {
 	// Expect method line
-	line := strings.TrimSpace(p.next())
+	untrimmedLine := p.next()
+	line := strings.TrimSpace(untrimmedLine)
 	// method is first token
 	parts := strings.Fields(line)
 	if len(parts) == 0 {
@@ -221,10 +233,29 @@ func (p *Parser) parseRequest() (*Request, error) {
 		target = strings.TrimSpace(line[len(method):])
 	}
 
+	leadingWhitespace := countLeadingWhitespace(untrimmedLine)
+
 	startLine := p.i - 1
 	req := &Request{
-		Method:  method,
-		Target:  target,
+		Method: Method{
+			Name: method,
+			Range: SourceRange{
+				StartLine: startLine,
+				StartCol:  leadingWhitespace,
+				EndCol:    leadingWhitespace + len(method),
+				EndLine:   startLine,
+			},
+		},
+		Target: Target{
+			Target: target,
+			Range: SourceRange{
+				StartLine: startLine,
+				// Could be more than +1, but we can consider all whitespace after the first to be part of the target
+				StartCol: leadingWhitespace + len(method) + 1,
+				EndCol:   len(untrimmedLine),
+				EndLine:  startLine,
+			},
+		},
 		Headers: map[string]string{},
 		Range:   computeLineRange(line, startLine),
 	}
@@ -370,6 +401,19 @@ func (p *Parser) parseRequest() (*Request, error) {
 	}
 
 	return req, nil
+}
+
+func countLeadingWhitespace(s string) int {
+	cnt := 0
+	for _, char := range s {
+		if unicode.IsSpace(char) {
+			cnt += 1
+		} else {
+			break
+		}
+	}
+
+	return cnt
 }
 
 // parseResponse expects current line is response line (HTTP/.. status)

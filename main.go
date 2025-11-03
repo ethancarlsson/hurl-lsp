@@ -1,6 +1,10 @@
 package main
 
 import (
+	"fmt"
+
+	"github.com/ethancarlsson/hurl-lsp/completions"
+	"github.com/ethancarlsson/hurl-lsp/hurlfile"
 	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -35,13 +39,18 @@ func main() {
 }
 
 func completion(context *glsp.Context, params *protocol.CompletionParams) (any, error) {
-	return []protocol.CompletionItem{
-		{
-			Label:      "testing",
-			Kind:       ptr(protocol.CompletionItemKindText),
-			InsertText: ptr(params.TextDocument.URI),
-		},
-	}, nil
+	hf, err := hurlfile.Parse(params.TextDocument.URI)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse the hurl file %w", err)
+	}
+
+	items := make([]protocol.CompletionItem, 0)
+
+	if hf.IsOnMethod(int(params.Position.Line), int(params.Position.Character)) {
+		items = completions.AddMethodCompletions(items)
+	}
+
+	return items, nil
 }
 
 func initialize(context *glsp.Context, params *protocol.InitializeParams) (any, error) {
