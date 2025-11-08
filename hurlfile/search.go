@@ -18,14 +18,14 @@ func (hf HurlFile) OnMethod(line, col int) bool {
 	return false
 }
 
-func (hf HurlFile) OnSection(line, col int) bool {
+func (hf HurlFile) OnRespSection(line, col int) bool {
 	for _, entry := range hf.Entries {
 		if entry.Response == nil {
 			continue
 		}
 
 		respRange := entry.Response.Range
-		if line == respRange.StartLine+1 && col == 0 {
+		if line == respRange.StartLine+1 && col <= 1 {
 			return true
 		}
 
@@ -34,7 +34,7 @@ func (hf HurlFile) OnSection(line, col int) bool {
 				continue
 			}
 
-			if col > s.Range.StartCol && col < s.Range.EndCol {
+			if col > s.Range.StartCol-1 && col < s.Range.EndCol+1 {
 				return true
 			}
 		}

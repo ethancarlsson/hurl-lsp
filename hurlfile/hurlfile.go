@@ -117,9 +117,9 @@ func (p *Parser) skipCommentsAndEmpty() {
 
 // Recognizers
 var reMethodLine = regexp.MustCompile(`^[A-Z]+\b(?:\s+.+)?$`)
-var reResponseLine = regexp.MustCompile(`^HTTP/\d+(?:\.\d+)?\s+\d+`) // e.g. HTTP/1.1 200
+var reResponseLine = regexp.MustCompile(`^HTTP[\/\d+]*(?:\.\d+)?\s+\d+`) // e.g. HTTP/1.1 200 or HTTP 400
 var reHeaderLine = regexp.MustCompile(`^[^:\s][^:]*\s*:\s*.*$`)
-var reSectionLine = regexp.MustCompile(`^\s*\[([A-Za-z0-9_-]+)\]\s*$`)
+var reSectionLine = regexp.MustCompile(`^\s*\[([A-Za-z0-9_-]*)\]\s*$`)
 
 func (p *Parser) Parse() (*HurlFile, error) {
 	h := &HurlFile{}
@@ -146,7 +146,9 @@ func (p *Parser) Parse() (*HurlFile, error) {
 	}
 
 	h.Range.EndCol = len(p.peek())
-	h.Range.EndLine = len(p.lines)
+	if len(h.Entries) > 0 {
+		h.Range.EndLine = h.Entries[len(h.Entries)-1].Range.EndLine
+	}
 
 	return h, nil
 }

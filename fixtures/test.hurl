@@ -8,3 +8,4 @@ POST {{url}}/people
 HTTP/1.1 201
 [Captures]
 id: jsonpath "$.id"
+[Asserts]

@@ -52,7 +52,7 @@ func completion(context *glsp.Context, params *protocol.CompletionParams) (any, 
 		items = completions.AddMethod(items)
 	}
 
-	if hf.OnSection(line, col) {
+	if hf.OnRespSection(line, col) {
 		items = completions.AddRespSection(items)
 	}
 

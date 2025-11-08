@@ -23,6 +23,9 @@ func TestParse(t *testing.T) {
 		expect.Equals(t, 7, hf.Entries[0].Response.Range.StartLine)
 		expect.Equals(t, 8, hf.Entries[0].Response.Sections[0].Range.StartLine)
 		expect.Equals(t, 9, hf.Entries[0].Response.Sections[0].Range.EndLine)
+
+		expect.Equals(t, true, hf.OnSection(8, 0))
+		expect.Equals(t, true, hf.OnSection(10, 4))
 	})
 
 	t.Run("partial request", func(t *testing.T) {
@@ -43,7 +46,7 @@ func TestParse(t *testing.T) {
 			hf.Entries[0].Request.Body.Value)
 
 		expect.Equals(t, 0, hf.Range.StartLine)
-		expect.Equals(t, 7, hf.Range.EndLine)
+		expect.Equals(t, 8, hf.Range.EndLine)
 
 		expect.Equals(t, 1, hf.Entries[0].Request.Range.StartLine)
 		expect.Equals(t, 5, hf.Entries[0].Request.Range.EndLine)
@@ -56,11 +59,17 @@ func TestParse(t *testing.T) {
 		expect.Equals(t, 2, hf.Entries[0].Request.Headers.Range.EndLine)
 
 		expect.Equals(t, 6, hf.Entries[1].Range.StartLine)
-		expect.Equals(t, 6, hf.Entries[1].Range.EndLine)
+		expect.Equals(t, 8, hf.Entries[1].Range.EndLine)
 
 		expect.Equals(t, 7, hf.Entries[1].Response.Range.StartLine)
+		expect.Equals(t, 8, hf.Entries[1].Response.Range.EndLine)
 		expect.Equals(t, 8, hf.Entries[1].Response.Sections[0].Range.StartLine)
-		expect.Equals(t, 9, hf.Entries[1].Response.Sections[0].Range.EndLine)
+		expect.Equals(t, 8, hf.Entries[1].Response.Sections[0].Range.EndLine)
+
+		expect.Equals(t, 1, hf.Entries[1].Response.Sections[0].Name.Range.StartCol)
+		expect.Equals(t, 3, hf.Entries[1].Response.Sections[0].Name.Range.EndCol)
+		expect.Equals(t, 8, hf.Entries[1].Response.Sections[0].Name.Range.StartLine)
+		expect.Equals(t, 8, hf.Entries[1].Response.Sections[0].Range.EndLine)
 
 	})
 

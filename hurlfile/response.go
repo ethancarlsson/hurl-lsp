@@ -28,12 +28,14 @@ func (p *Parser) parseResponse() (*Response, error) {
 		statusNum = 0
 	}
 
-	startLine := p.i - 1
 	resp := &Response{
 		Version: version,
 		Status:  statusNum,
 		Headers: map[string]string{},
-		Range:   computeLineRange(line, startLine),
+		Range: SourceRange{
+			StartLine: p.i - 1,
+			StartCol:  0,
+		},
 	}
 
 	defer func() {
@@ -134,5 +136,6 @@ func (p *Parser) parseResponse() (*Response, error) {
 		resp.Body = strings.Join(bodyLines, "\n")
 		return resp, nil
 	}
+
 	return resp, nil
 }

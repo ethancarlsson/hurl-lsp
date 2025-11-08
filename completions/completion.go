@@ -22,7 +22,7 @@ func AddMethod(items []protocol.CompletionItem) []protocol.CompletionItem {
 func AddRespSection(items []protocol.CompletionItem) []protocol.CompletionItem {
 	kind := protocol.CompletionItemKindEnumMember
 
-	for _, section := range []string{"[Captures]", "[Asserts]"} {
+	for _, section := range []string{"[Captures", "[Asserts"} {
 		items = append(items, protocol.CompletionItem{
 			Label:      section,
 			Kind:       &kind,
