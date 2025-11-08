@@ -83,10 +83,15 @@ type Response struct {
 }
 
 type Section struct {
-	Name      string
+	Name      Ranged[string]
 	KeyValues map[string]string
 	Range     SourceRange
 	RawLines  []string
+}
+
+type Ranged[T any] struct {
+	Value T
+	Range SourceRange
 }
 
 // Parser
@@ -329,7 +334,7 @@ func (p *Parser) parseRequest() (*Request, error) {
 			}
 			nextLine := strings.TrimSpace(p.lines[nextMeaningful])
 			// If the next line is not a header/section/response/method, treat everything from nextMeaningful as body
-			req.Body.Range.StartLine = p.i
+			req.Body.Range.StartLine = p.i - 1
 			if !(reHeaderLine.MatchString(nextLine) || reSectionLine.MatchString(nextLine) || reResponseLine.MatchString(nextLine) || reMethodLine.MatchString(nextLine)) {
 				// collect body from nextMeaningful until we hit a line that is a method/response that starts a new entry
 				bodyLines := []string{}
@@ -357,7 +362,7 @@ func (p *Parser) parseRequest() (*Request, error) {
 		if len(trimL) > 0 && (strings.HasPrefix(trimL, "{") || strings.HasPrefix(trimL, "[") || strings.HasPrefix(trimL, "`") || strings.HasPrefix(trimL, "```")) {
 			bodyLines := []string{}
 
-			req.Body.Range.StartLine = p.i
+			req.Body.Range.StartLine = p.i - 1
 			for j := p.i; j < p.len; j++ {
 				t := strings.TrimSpace(p.lines[j])
 				if reMethodLine.MatchString(t) || reResponseLine.MatchString(t) {
@@ -403,19 +408,6 @@ func (p *Parser) parseRequest() (*Request, error) {
 	return req, nil
 }
 
-func countLeadingWhitespace(s string) int {
-	cnt := 0
-	for _, char := range s {
-		if unicode.IsSpace(char) {
-			cnt += 1
-		} else {
-			break
-		}
-	}
-
-	return cnt
-}
-
 // parseResponse expects current line is response line (HTTP/.. status)
 func (p *Parser) parseResponse() (*Response, error) {
 	line := strings.TrimSpace(p.next())
@@ -459,6 +451,7 @@ func (p *Parser) parseResponse() (*Response, error) {
 			resp.Sections = append(resp.Sections, *sec)
 			continue
 		}
+
 		// Header?
 		if reHeaderLine.MatchString(raw) {
 			p.i++
@@ -466,6 +459,7 @@ func (p *Parser) parseResponse() (*Response, error) {
 			resp.Headers[k] = v
 			continue
 		}
+
 		// Empty line or comment - may be a separator before body
 		if trim == "" || strings.HasPrefix(trim, "#") {
 			p.i++
@@ -501,6 +495,7 @@ func (p *Parser) parseResponse() (*Response, error) {
 			}
 			continue
 		}
+
 		// If line looks like body start
 		trimL := strings.TrimLeft(raw, " \t")
 		if len(trimL) > 0 && (strings.HasPrefix(trimL, "{") || strings.HasPrefix(trimL, "[") || strings.HasPrefix(trimL, "`") || strings.HasPrefix(trimL, "```")) {
@@ -546,7 +541,7 @@ func (p *Parser) parseSection() (*Section, error) {
 
 	startLine := p.i - 1
 	sec := &Section{
-		Name:      name,
+		Name:      Ranged[string]{Value: name, Range: p.computeStringRange(name, countLeadingWhitespace(line))},
 		KeyValues: map[string]string{},
 		Range:     computeLineRange(line, startLine),
 	}
@@ -592,9 +587,27 @@ func splitHeader(line string) (string, string) {
 	return k, v
 }
 
-func (p *Parser) currentLineNum() int {
-	// 1-based line numbers
-	return p.i + 1
+func (p *Parser) computeStringRange(s string, leadingChars int) SourceRange {
+	startLine := p.i - 1
+	return SourceRange{
+		StartLine: startLine,
+		StartCol:  leadingChars + 1,
+		EndLine:   startLine,
+		EndCol:    len(s),
+	}
+}
+
+func countLeadingWhitespace(s string) int {
+	cnt := 0
+	for _, char := range s {
+		if unicode.IsSpace(char) {
+			cnt += 1
+		} else {
+			break
+		}
+	}
+
+	return cnt
 }
 
 func computeLineRange(line string, lineNum int) SourceRange {

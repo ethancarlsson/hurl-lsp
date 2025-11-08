@@ -16,9 +16,12 @@ func TestParse(t *testing.T) {
 		expect.Equals(t, "POST", hf.Entries[0].Request.Method.Name)
 		expect.Equals(t, 0, hf.Entries[0].Request.Method.Range.StartCol)
 		expect.Equals(t, 4, hf.Entries[0].Request.Method.Range.EndCol)
-		expect.Equals(t, "{{url}}/people", hf.Entries[0].Request.Target)
+		expect.Equals(t, "{{url}}/people", hf.Entries[0].Request.Target.Target)
 		expect.Equals(t, 0, hf.Range.StartLine)
-		expect.Equals(t, 8, hf.Range.EndLine)
+		expect.Equals(t, 10, hf.Range.EndLine)
+
+		expect.Equals(t, 8, hf.Entries[0].Response.Range.StartLine)
+		expect.Equals(t, 9, hf.Entries[0].Response.Sections[0].Range.StartLine)
 	})
 
 	t.Run("partial request", func(t *testing.T) {
@@ -32,7 +35,7 @@ func TestParse(t *testing.T) {
 		expect.Equals(t, 3, hf.Entries[1].Request.Method.Range.StartCol)
 		expect.Equals(t, 6, hf.Entries[1].Request.Method.Range.EndCol)
 
-		expect.Equals(t, "", hf.Entries[0].Request.Target)
+		expect.Equals(t, "", hf.Entries[0].Request.Target.Target)
 		expect.Equals(t, `{ 
 	"hello": "test" 
 }`,

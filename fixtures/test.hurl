@@ -5,4 +5,5 @@ POST {{url}}/people
       "mass": "77",
       "birth_year": "1999"
 }
+HTTP/1.1 201
 
