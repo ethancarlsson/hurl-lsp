@@ -20,6 +20,10 @@ func (hf HurlFile) OnMethod(line, col int) bool {
 
 func (hf HurlFile) OnSection(line, col int) bool {
 	for _, entry := range hf.Entries {
+		if entry.Response == nil {
+			continue
+		}
+
 		respRange := entry.Response.Range
 		if line == respRange.StartLine+1 && col == 0 {
 			return true

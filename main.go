@@ -46,7 +46,7 @@ func completion(context *glsp.Context, params *protocol.CompletionParams) (any, 
 
 	items := make([]protocol.CompletionItem, 0)
 	line := int(params.Position.Line)
-	col := int(params.Position.Character)
+	col := int(params.Position.Character) - 1 // zero base
 
 	if hf.OnMethod(line, col) {
 		items = completions.AddMethod(items)
