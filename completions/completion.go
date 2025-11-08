@@ -32,3 +32,18 @@ func AddRespSection(items []protocol.CompletionItem) []protocol.CompletionItem {
 
 	return items
 }
+
+func AddVars(items []protocol.CompletionItem, vars []string) []protocol.CompletionItem {
+	kind := protocol.CompletionItemKindVariable
+
+	for _, v := range vars {
+		withCurlys := "{{" + v + "}}"
+		items = append(items, protocol.CompletionItem{
+			Label:      v,
+			Kind:       &kind,
+			InsertText: &withCurlys,
+		})
+	}
+
+	return items
+}
