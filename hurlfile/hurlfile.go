@@ -221,10 +221,8 @@ func (p *Parser) parseSection() (*Section, error) {
 		}
 		// parse key-value: expect "key : value" or "key: value"
 		if reHeaderLine.MatchString(raw) {
-			p.i++
 			k, v := splitHeader(raw)
 			sec.KeyValues[k] = v
-			continue
 		}
 		// if not a key-value line, treat as raw line included in section raw content and consume
 		sec.RawLines = append(sec.RawLines, raw)

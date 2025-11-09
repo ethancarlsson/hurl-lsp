@@ -1,6 +1,7 @@
 package hurlfile_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/ethancarlsson/hurl-lsp/expect"
@@ -18,16 +19,49 @@ func TestParse(t *testing.T) {
 		expect.Equals(t, 4, hf.Entries[0].Request.Method.Range.EndCol)
 		expect.Equals(t, "{{url}}/people", hf.Entries[0].Request.Target.Target)
 		expect.Equals(t, 0, hf.Range.StartLine)
-		expect.Equals(t, 11, hf.Range.EndLine)
+		expect.Equals(t, 12, hf.Range.EndLine)
 
 		expect.Equals(t, 7, hf.Entries[0].Response.Range.StartLine)
 		expect.Equals(t, 8, hf.Entries[0].Response.Sections[0].Range.StartLine)
 		expect.Equals(t, 10, hf.Entries[0].Response.Sections[0].Range.EndLine)
 
-		expect.Equals(t, true, hf.OnRespSection(8, 0))
+		expect.Equals(t, false, hf.OnRespSectionName(7, 0))
+		expect.Equals(t, true, hf.OnRespSectionName(8, 0))
+		expect.Equals(t, false, hf.OnRespSectionName(9, 0))
 		expect.Equals(t, 1, len(hf.Captures()))
-		expect.Equals(t, []string{"id", "test"}, hf.Captures()[0].Variables)
+		vars := hf.Captures()[0].Variables
+		slices.Sort(vars) // order not guaranteed
+		expect.Equals(t, []string{"id", "test"}, vars)
+
 		expect.Equals(t, 10, hf.Captures()[0].UseAfter)
+
+		// [Captures] // 8
+		// id: jsonpath "$.id" // 9
+		// test: "hello" // 10
+		// [Asserts] // 11
+		// count "$.list" == 2 // 12
+		expect.Equals(t, false, hf.CanUseFilter(8, 0))
+		expect.Equals(t, true, hf.CanUseFilter(9, 5))
+		expect.Equals(t, false, hf.CanUseFilter(9, 2))
+		expect.Equals(t, true, hf.CanUseFilter(9, 3))
+
+		// Captures should be able to use filters after : but not before
+		expect.Equals(t, false, hf.CanUseFilter(10, 0))
+		expect.Equals(t, true, hf.CanUseFilter(10, 5))
+		expect.Equals(t, false, hf.CanUseFilter(10, 4))
+
+		// In the quoted area
+		expect.Equals(t, false, hf.CanUseFilter(10, 7))
+		expect.Equals(t, false, hf.CanUseFilter(9, 14))
+
+		// out of the quoted area
+		expect.Equals(t, true, hf.CanUseFilter(9, 12))
+
+		// Shouldn't be available on name
+		expect.Equals(t, false, hf.CanUseFilter(11, 7))
+		// Should be available at any part of the string
+		expect.Equals(t, true, hf.CanUseFilter(12, 0))
+		expect.Equals(t, true, hf.CanUseFilter(12, 5))
 	})
 
 	t.Run("partial request", func(t *testing.T) {

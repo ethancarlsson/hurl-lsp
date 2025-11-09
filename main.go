@@ -52,12 +52,16 @@ func completion(context *glsp.Context, params *protocol.CompletionParams) (any, 
 		items = completions.AddMethod(items)
 	}
 
-	if hf.OnRespSection(line, col) {
+	if hf.OnRespSectionName(line, col) {
 		items = completions.AddRespSection(items)
 	}
 
 	if caps := hf.Captures().Before(line); len(caps) > 0 {
 		items = completions.AddVars(items, caps.Variables())
+	}
+
+	if hf.CanUseFilter(line, col) {
+		items = completions.AddFilters(items)
 	}
 
 	return items, nil

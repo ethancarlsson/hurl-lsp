@@ -10,3 +10,4 @@ HTTP/1.1 201
 id: jsonpath "$.id"
 test: "hello"
 [Asserts]
+count "$.list" == 2
