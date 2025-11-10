@@ -3,23 +3,14 @@ package hurlfile
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"os"
 	"regexp"
 	"strings"
 	"unicode"
 )
 
-func Parse(uri string) (*HurlFile, error) {
-	f, err := os.OpenFile(strings.Replace(uri, "file://", "", 1), os.O_RDONLY, os.ModePerm)
-	if err != nil {
-		return &HurlFile{}, fmt.Errorf("couldn't open file: %w", err)
-	}
-
-	parser, err := NewParser(f)
-	if err != nil {
-		return &HurlFile{}, fmt.Errorf("couldn't create parser: %w", err)
-	}
+func Parse(lines []string) (*HurlFile, error) {
+	parser := NewParser(lines)
 
 	hurlFile, err := parser.Parse()
 	if err != nil {
@@ -87,23 +78,12 @@ type Parser struct {
 	len   int
 }
 
-func NewParser(r io.Reader) (*Parser, error) {
-	scanner := bufio.NewScanner(r)
-	// Keep line endings content but trim trailing \r if present
-	var lines []string
-	for scanner.Scan() {
-		line := scanner.Text()
-		lines = append(lines, line)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
+func NewParser(lines []string) *Parser {
 	return &Parser{
 		lines: lines,
 		i:     0,
 		len:   len(lines),
-	}, nil
+	}
 }
 
 func (p *Parser) eof() bool { return p.i >= p.len }

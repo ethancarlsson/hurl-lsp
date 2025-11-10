@@ -21,6 +21,7 @@ const lsName = "hurl_ls"
 var (
 	version string = "0.0.1"
 	handler protocol.Handler
+	lines   []string = []string{}
 )
 
 func main() {
@@ -33,6 +34,8 @@ func main() {
 		SetTrace:                  setTrace,
 		TextDocumentCompletion:    completion,
 		TextDocumentSignatureHelp: signatureHelp,
+		TextDocumentDidOpen:       documentDidOpen,
+		TextDocumentDidChange:     documentDidChange,
 	}
 
 	server := server.NewServer(&handler, lsName, false)
@@ -40,11 +43,33 @@ func main() {
 	server.RunStdio()
 }
 
-func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {
-	lines, err := hurlfile.ParseLines(params.TextDocument.URI)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse the hurl file %w", err)
+func documentDidOpen(context *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
+	if err := parseDocument(params.TextDocument.URI); err != nil {
+		return err
 	}
+
+	return nil
+}
+
+func documentDidChange(context *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
+	if err := parseDocument(params.TextDocument.URI); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func parseDocument(uri string) error {
+	parsedLines, err := hurlfile.ParseLines(uri)
+	if err != nil {
+		return fmt.Errorf("Failed to parse the hurl file %w", err)
+	}
+
+	lines = parsedLines
+	return nil
+}
+
+func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {
 	line := int(params.Position.Line)
 	col := int(params.Position.Character) - 1 // zero base
 
@@ -67,7 +92,7 @@ func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) 
 }
 
 func completion(context *glsp.Context, params *protocol.CompletionParams) (any, error) {
-	hf, err := hurlfile.Parse(params.TextDocument.URI)
+	hf, err := hurlfile.Parse(lines)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse the hurl file %w", err)
 	}

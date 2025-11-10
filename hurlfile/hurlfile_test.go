@@ -10,9 +10,12 @@ import (
 
 func TestParse(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
-		hf, err := hurlfile.Parse("file://../fixtures/test.hurl")
-
+		lines, err := hurlfile.ParseLines("file://../fixtures/test.hurl")
 		expect.NoErr(t, err)
+
+		hf, err := hurlfile.Parse(lines)
+		expect.NoErr(t, err)
+
 		expect.Equals(t, 1, len(hf.Entries))
 		expect.Equals(t, "POST", hf.Entries[0].Request.Method.Name)
 		expect.Equals(t, 0, hf.Entries[0].Request.Method.Range.StartCol)
@@ -65,9 +68,12 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("partial request", func(t *testing.T) {
-		hf, err := hurlfile.Parse("file://../fixtures/test_partial_req.hurl")
-
+		lines, err := hurlfile.ParseLines("file://../fixtures/test_partial_req.hurl")
 		expect.NoErr(t, err)
+
+		hf, err := hurlfile.Parse(lines)
+		expect.NoErr(t, err)
+
 		expect.Equals(t, 2, len(hf.Entries))
 
 		expect.Equals(t, "PATCH", hf.Entries[0].Request.Method.Name)
@@ -109,8 +115,7 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("file doesn't exist", func(t *testing.T) {
-		_, err := hurlfile.Parse("file:///doesntexist")
-
+		_, err := hurlfile.ParseLines("file://../fixtures/notexists.hurl")
 		expect.Err(t, err)
 		expect.ErrContains(t, "couldn't open file", err)
 	})
