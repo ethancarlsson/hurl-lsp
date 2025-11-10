@@ -5,6 +5,7 @@ import (
 
 	"github.com/ethancarlsson/hurl-lsp/completions"
 	"github.com/ethancarlsson/hurl-lsp/hurlfile"
+	"github.com/ethancarlsson/hurl-lsp/signaturehelp"
 	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -26,16 +27,43 @@ func main() {
 	commonlog.Configure(1, nil)
 
 	handler = protocol.Handler{
-		Initialize:             initialize,
-		Initialized:            initialized,
-		Shutdown:               shutdown,
-		SetTrace:               setTrace,
-		TextDocumentCompletion: completion,
+		Initialize:                initialize,
+		Initialized:               initialized,
+		Shutdown:                  shutdown,
+		SetTrace:                  setTrace,
+		TextDocumentCompletion:    completion,
+		TextDocumentSignatureHelp: signatureHelp,
 	}
 
 	server := server.NewServer(&handler, lsName, false)
 
 	server.RunStdio()
+}
+
+func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {
+	lines, err := hurlfile.ParseLines(params.TextDocument.URI)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse the hurl file %w", err)
+	}
+	line := int(params.Position.Line)
+	col := int(params.Position.Character) - 1 // zero base
+
+	sym := signaturehelp.Lines(lines).SymbolAt(line, col)
+	if desc := sym.Description(); desc.Desctiption != "" {
+		help := protocol.SignatureHelp{Signatures: []protocol.SignatureInformation{
+			{
+				Label:         sym.String(),
+				Documentation: desc.Desctiption,
+				Parameters: []protocol.ParameterInformation{
+					{Label: desc.Detail.In},
+				},
+			},
+		}}
+
+		return &help, nil
+	}
+
+	return nil, nil
 }
 
 func completion(context *glsp.Context, params *protocol.CompletionParams) (any, error) {

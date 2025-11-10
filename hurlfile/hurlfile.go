@@ -29,6 +29,26 @@ func Parse(uri string) (*HurlFile, error) {
 	return hurlFile, nil
 }
 
+func ParseLines(uri string) ([]string, error) {
+	f, err := os.OpenFile(strings.Replace(uri, "file://", "", 1), os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		return []string{}, fmt.Errorf("couldn't open file: %w", err)
+	}
+
+	scanner := bufio.NewScanner(f)
+	// Keep line endings content but trim trailing \r if present
+	var lines []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		lines = append(lines, line)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return lines, nil
+}
+
 // AST structures
 type HurlFile struct {
 	Entries []Entry
