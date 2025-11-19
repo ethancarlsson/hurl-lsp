@@ -37,6 +37,25 @@ func AddFilters(items []protocol.CompletionItem) []protocol.CompletionItem {
 	return items
 }
 
+
+type CompletionPath struct {
+	path string
+}
+
+func AddPaths(items []protocol.CompletionItem, paths []string) []protocol.CompletionItem {
+	kind := protocol.CompletionItemKindField
+
+	for _, path := range paths {
+		items = append(items, protocol.CompletionItem{
+			Label:      path,
+			Kind:       &kind,
+			InsertText: &path,
+		})
+	}
+
+	return items
+}
+
 func AddRespSection(items []protocol.CompletionItem) []protocol.CompletionItem {
 	kind := protocol.CompletionItemKindEnumMember
 

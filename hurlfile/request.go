@@ -45,7 +45,7 @@ func (p *Parser) parseRequest() (*Request, error) {
 	headers := make(map[string]string)
 	req := &Request{
 		Method: Method{
-			Name: method,
+			Name: strings.TrimSpace(method),
 			Range: SourceRange{
 				StartLine: startLine,
 				StartCol:  leadingWhitespace,

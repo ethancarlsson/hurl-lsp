@@ -18,6 +18,32 @@ func (hf HurlFile) OnMethod(line, col int) bool {
 	return false
 }
 
+func (hf HurlFile) GetReq(line, col int) Request {
+	for _, entry := range hf.Entries {
+		reqRange := entry.Request.Range
+		if line >= reqRange.StartLine && line <= reqRange.EndLine {
+			return entry.Request
+		}
+	}
+
+	return Request{}
+}
+
+func (hf HurlFile) OnUri(line, col int) bool {
+	for _, entry := range hf.Entries {
+		req := entry.Request
+		if line != req.Range.StartLine {
+			continue
+		}
+
+		if col > req.Method.Range.EndCol {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (hf HurlFile) OnRespSectionName(line, col int) bool {
 	for _, entry := range hf.Entries {
 		if entry.Response == nil {
@@ -73,6 +99,9 @@ func (hf HurlFile) CanUseFilter(line, col int) bool {
 }
 
 func canUseFilterOnLine(sec Section, line, col int) bool {
+	if sec.Name.Value != Capture {
+		return true
+	}
 	linesFromSecStart := line - (sec.Range.StartLine + 1) // +1 because we don't include the name
 	if len(sec.RawLines) < linesFromSecStart {
 		return false

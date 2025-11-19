@@ -1,10 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/ethancarlsson/hurl-lsp/completions"
 	"github.com/ethancarlsson/hurl-lsp/hurlfile"
+	"github.com/ethancarlsson/hurl-lsp/openapi"
 	"github.com/ethancarlsson/hurl-lsp/signaturehelp"
 	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
@@ -18,10 +22,30 @@ import (
 
 const lsName = "hurl_ls"
 
+type oaiPath string
+
+func (p oaiPath) Ft() string {
+	splitPath := strings.Split(string(p), ".")
+	if len(splitPath) == 0 {
+		return string(p)
+	}
+
+	return splitPath[len(splitPath)-1]
+}
+
+type config struct {
+	OpenapiDefPath oaiPath `json:"openapi_def"`
+}
+
 var (
 	version string = "0.0.1"
 	handler protocol.Handler
-	lines   []string = []string{}
+	lines   []string           = []string{}
+	hf      *hurlfile.HurlFile = &hurlfile.HurlFile{}
+
+	conf config      = config{}
+	oai  openapi.OAI = openapi.OAI{}
+	errs []error     = []error{}
 )
 
 func main() {
@@ -66,6 +90,12 @@ func parseDocument(uri string) error {
 	}
 
 	lines = parsedLines
+
+	hf, err = hurlfile.Parse(lines)
+	if err != nil {
+		return fmt.Errorf("Failed to parse the hurl file %w", err)
+	}
+
 	return nil
 }
 
@@ -88,22 +118,38 @@ func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) 
 		return &help, nil
 	}
 
+	if hf == nil {
+		return nil, nil
+	}
+
+	if hf.OnMethod(line, col) || hf.OnUri(line, col) {
+		req := hf.GetReq(line, col)
+		op := oai.GetOp(req.Method.Name, req.Target.Target)
+		help := protocol.SignatureHelp{Signatures: []protocol.SignatureInformation{
+			{
+				Label: op.Method + " " + op.Path,
+				Documentation: fmt.Sprintf(
+					"Summary: %s\nDescription: %s",
+					op.Detail.Summary, op.Detail.Description,
+				),
+			},
+		},
+		}
+
+		return &help, nil
+	}
+
 	return nil, nil
 }
 
 func completion(context *glsp.Context, params *protocol.CompletionParams) (any, error) {
-	hf, err := hurlfile.Parse(lines)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse the hurl file %w", err)
+	items := make([]protocol.CompletionItem, 0)
+	if hf == nil {
+		return items, nil
 	}
 
-	items := make([]protocol.CompletionItem, 0)
 	line := int(params.Position.Line)
 	col := int(params.Position.Character) - 1 // zero base
-
-	if hf.OnMethod(line, col) {
-		items = completions.AddMethod(items)
-	}
 
 	if hf.OnRespSectionName(line, col) {
 		items = completions.AddRespSection(items)
@@ -115,6 +161,10 @@ func completion(context *glsp.Context, params *protocol.CompletionParams) (any, 
 
 	if hf.CanUseFilter(line, col) {
 		items = completions.AddFilters(items)
+	}
+
+	if hf.OnUri(line, col) {
+		items = completions.AddPaths(items, oai.PathList())
 	}
 
 	return items, nil
@@ -133,6 +183,42 @@ func initialize(context *glsp.Context, params *protocol.InitializeParams) (any, 
 }
 
 func initialized(context *glsp.Context, params *protocol.InitializedParams) error {
+	contents, err := os.ReadFile("./.hurl-ls.json")
+	if err != nil {
+		// do nothing if there's an error because it's not really needed
+		return nil
+	}
+
+	if err := json.Unmarshal(contents, &conf); err != nil {
+		return err
+	}
+
+	if conf.OpenapiDefPath == "" {
+		return nil
+	}
+
+	fileContent, err := os.ReadFile(string(conf.OpenapiDefPath))
+	if err != nil {
+		if m := commonlog.NewErrorMessage(0); m != nil {
+			m.Set("_message", "Could not read openapi file").
+				Set("err", err).Send()
+		}
+		errs = append(errs, err)
+		return nil
+	}
+
+	openAPI, err := openapi.Parse(conf.OpenapiDefPath.Ft(), fileContent)
+	if err != nil {
+		if m := commonlog.NewErrorMessage(0); m != nil {
+			m.Set("_message", "Could not parse openapi file").
+				Set("err", err).Send()
+		}
+		errs = append(errs, err)
+		return nil
+	}
+
+	oai = openAPI
+
 	return nil
 }
 
