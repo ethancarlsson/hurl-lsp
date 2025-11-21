@@ -34,8 +34,30 @@ func (o OAI) PathList() []string {
 }
 
 type OpDetail struct {
-	Summary     string `json:"summary"`
-	Description string `json:"description"`
+	Summary     string   `json:"summary"`
+	Description string   `json:"description"`
+	Parameters  OpParams `json:"parameters"`
+}
+
+type OpParams []OpParam
+
+func (ops OpParams) ToDocMap() map[string]string {
+	m := make(map[string]string, len(ops))
+	for _, op := range ops {
+		m[op.Name] = fmt.Sprintf("%s: %s=%s", op.In, op.Name, op.Schema.Type)
+	}
+
+	return m
+}
+
+type OpParam struct {
+	Name   string `json:"name"`
+	In     string `json:"in"`
+	Schema Schema `json:"schema"`
+}
+
+type Schema struct {
+	Type string `json:"type"`
 }
 
 type Op struct {
@@ -88,7 +110,7 @@ func (o OAI) GetOp(method, path string) Op {
 		Method: method,
 	}
 
-	const httpMethodsCount = 6
+	const httpMethodsCount = 9
 	pathContent := make(map[string]OpDetail, httpMethodsCount)
 
 	if err := json.Unmarshal(rawPathContent, &pathContent); err != nil {

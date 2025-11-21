@@ -100,6 +100,10 @@ func parseDocument(uri string) error {
 }
 
 func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {
+	// Reparse on signatureHelp because 1) signatureHelp will not be called as often,
+	// and; 2) because we can end up 1 character behind when relying on onChanged
+	parseDocument(params.TextDocument.URI)
+
 	line := int(params.Position.Line)
 	col := int(params.Position.Character) - 1 // zero base
 
@@ -132,6 +136,7 @@ func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) 
 					"Summary: %s\nDescription: %s",
 					op.Detail.Summary, op.Detail.Description,
 				),
+				Parameters: signaturehelp.ParamsFromMap(op.Detail.Parameters.ToDocMap()),
 			},
 		},
 		}
