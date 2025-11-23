@@ -202,6 +202,12 @@ func initialized(context *glsp.Context, params *protocol.InitializedParams) erro
 		return nil
 	}
 
+	parseOpenapi()
+
+	return nil
+}
+
+func parseOpenapi() {
 	fileContent, err := os.ReadFile(string(conf.OpenapiDefPath))
 	if err != nil {
 		if m := commonlog.NewErrorMessage(0); m != nil {
@@ -209,7 +215,7 @@ func initialized(context *glsp.Context, params *protocol.InitializedParams) erro
 				Set("err", err).Send()
 		}
 		errs = append(errs, err)
-		return nil
+		return
 	}
 
 	openAPI, err := openapi.Parse(conf.OpenapiDefPath.Ft(), fileContent)
@@ -219,12 +225,10 @@ func initialized(context *glsp.Context, params *protocol.InitializedParams) erro
 				Set("err", err).Send()
 		}
 		errs = append(errs, err)
-		return nil
+		return
 	}
 
 	oai = openAPI
-
-	return nil
 }
 
 func shutdown(context *glsp.Context) error {

@@ -37,7 +37,6 @@ func AddFilters(items []protocol.CompletionItem) []protocol.CompletionItem {
 	return items
 }
 
-
 type CompletionPath struct {
 	path string
 }
@@ -59,11 +58,12 @@ func AddPaths(items []protocol.CompletionItem, paths []string) []protocol.Comple
 func AddRespSection(items []protocol.CompletionItem) []protocol.CompletionItem {
 	kind := protocol.CompletionItemKindEnumMember
 
-	for _, section := range []string{"[Captures", "[Asserts"} {
+	for _, section := range []string{"Captures", "Asserts"} {
+		insertText := "[" + section + "]"
 		items = append(items, protocol.CompletionItem{
 			Label:      section,
 			Kind:       &kind,
-			InsertText: &section,
+			InsertText: &insertText,
 		})
 	}
 
