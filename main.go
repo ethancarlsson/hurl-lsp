@@ -148,6 +148,7 @@ func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) 
 }
 
 func completion(context *glsp.Context, params *protocol.CompletionParams) (any, error) {
+
 	items := make([]protocol.CompletionItem, 0)
 	if hf == nil {
 		return items, nil
@@ -168,11 +169,28 @@ func completion(context *glsp.Context, params *protocol.CompletionParams) (any, 
 		items = completions.AddFilters(items)
 	}
 
-	if hf.OnUri(line, col) {
-		items = completions.AddPaths(items, oai.PathList())
-	}
+	items = addRequestAwareCompletions(items, line, col)
 
 	return items, nil
+}
+
+func addRequestAwareCompletions(items []protocol.CompletionItem, line, col int) []protocol.CompletionItem {
+	if !hf.OnUri(line, col) {
+		return items
+	}
+
+	req := hf.GetReq(line, col)
+	op := oai.GetOp(req.Method.Name, req.Target.Target)
+
+	if op.NotDocumented() {
+		items = completions.AddPaths(items, oai.PathList())
+
+		return items
+	}
+
+	items = completions.AddParams(items, op.Detail.Parameters.ToDocMap())
+
+	return items
 }
 
 func initialize(context *glsp.Context, params *protocol.InitializeParams) (any, error) {

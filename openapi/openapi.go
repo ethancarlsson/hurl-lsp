@@ -68,6 +68,10 @@ type Op struct {
 
 const undocumentedOpSummary = "Operation not documented"
 
+func (o Op) NotDocumented() bool {
+	return o.Detail.Summary == undocumentedOpSummary
+}
+
 func (o OAI) GetOp(method, path string) Op {
 	// We look for the longest possible match to get the most specific match
 	// So if there is /pets and /pets/{id}, /pets/1 will match both but we would

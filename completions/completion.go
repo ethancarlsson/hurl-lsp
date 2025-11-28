@@ -85,6 +85,22 @@ func AddVars(items []protocol.CompletionItem, vars []string) []protocol.Completi
 	return items
 }
 
+func AddParams(items []protocol.CompletionItem, params map[string]string) []protocol.CompletionItem {
+	kind := protocol.CompletionItemKindField
+
+	for param, paramDocs := range params {
+		paramText := param + "="
+		items = append(items, protocol.CompletionItem{
+			Label:         param,
+			Kind:          &kind,
+			InsertText:    &paramText,
+			Documentation: paramDocs,
+		})
+	}
+
+	return items
+}
+
 func ptr[T any](v T) *T {
 	return &v
 }
