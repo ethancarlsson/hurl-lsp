@@ -50,6 +50,17 @@ func (ops OpParams) ToDocMap() map[string]string {
 	return m
 }
 
+func (ops OpParams) In(in string) OpParams {
+	params := make(OpParams, 0, len(ops))
+	for _, op := range ops {
+		if op.In == in {
+			params = append(params, op)
+		}
+	}
+
+	return params
+}
+
 type OpParam struct {
 	Name   string `json:"name"`
 	In     string `json:"in"`

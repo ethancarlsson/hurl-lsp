@@ -188,7 +188,7 @@ func addRequestAwareCompletions(items []protocol.CompletionItem, line, col int) 
 		return items
 	}
 
-	items = completions.AddParams(items, op.Detail.Parameters.ToDocMap())
+	items = completions.AddParams(items, op.Detail.Parameters.In("query").ToDocMap())
 
 	return items
 }
