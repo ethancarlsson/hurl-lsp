@@ -1,6 +1,8 @@
 package completions
 
 import (
+	"strings"
+
 	"github.com/ethancarlsson/hurl-lsp/builtin"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
@@ -45,10 +47,11 @@ func AddPaths(items []protocol.CompletionItem, paths []string) []protocol.Comple
 	kind := protocol.CompletionItemKindField
 
 	for _, path := range paths {
+		pathToInsert := strings.ReplaceAll(strings.ReplaceAll(path, "{", "{{"), "}", "}}")
 		items = append(items, protocol.CompletionItem{
 			Label:      path,
 			Kind:       &kind,
-			InsertText: &path,
+			InsertText: &pathToInsert,
 		})
 	}
 
