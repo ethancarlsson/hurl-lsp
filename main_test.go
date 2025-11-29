@@ -107,8 +107,8 @@ func TestCompletion(t *testing.T) {
 					URI: "./fixtures/test_captures.hurl",
 				},
 				Position: protocol.Position{
-					Line:      0,
-					Character: 20,
+					Line:      15,
+					Character: 12,
 				},
 			},
 		}
@@ -120,8 +120,13 @@ func TestCompletion(t *testing.T) {
 		expect.NoErr(t, err)
 
 		items := is.([]protocol.CompletionItem)
-		expect.Equals(t, 13, len(items))
+		// 13 paths + the 2 captured variables
+		expect.Equals(t, 15, len(items))
 		for _, item := range items {
+			if item.Label == "id" || item.Label == "name" {
+				// Don't test the captured variables
+				continue
+			}
 			_, ok := oai.Paths[item.Label]
 			expect.Equals(t, true, ok)
 		}

@@ -12,3 +12,8 @@ PUT {{url}}/pet
 {
 
 }
+
+GET {{url}}
+{
+
+}
