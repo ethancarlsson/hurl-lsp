@@ -107,7 +107,7 @@ func (p *Parser) next() string {
 func (p *Parser) skipCommentsAndEmpty() {
 	for !p.eof() {
 		line := strings.TrimSpace(p.peek())
-		if line == "" || strings.HasPrefix(line, "#") {
+		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, "#") {
 			p.i++
 			continue
 		}
@@ -154,6 +154,7 @@ func (p *Parser) Parse() (*HurlFile, error) {
 }
 
 func (p *Parser) parseEntry() (*Entry, error) {
+	entryStart := p.i
 	req, err := p.parseRequest()
 	if err != nil {
 		return nil, err
@@ -172,20 +173,22 @@ func (p *Parser) parseEntry() (*Entry, error) {
 			resp = r
 		}
 	}
+
+	p.skipCommentsAndEmpty()
+
 	entry := &Entry{
 		Request:  *req,
 		Response: resp,
 		Range: SourceRange{
-			StartLine: req.Range.StartLine,
+			StartLine: entryStart,
 			StartCol:  req.Range.StartCol,
 			EndCol:    req.Range.EndCol,
-			EndLine:   req.Range.EndLine,
+			EndLine:   p.i,
 		},
 	}
 
 	if resp != nil {
 		entry.Range.EndCol = resp.Range.EndCol
-		entry.Range.EndLine = resp.Range.EndLine
 	}
 
 	return entry, nil

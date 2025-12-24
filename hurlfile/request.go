@@ -1,6 +1,7 @@
 package hurlfile
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -76,10 +77,19 @@ func (p *Parser) parseRequest() (*Request, error) {
 		req.Body.Range.EndCol = len(p.peek())
 	}()
 
+	isMultilineStringBody := false
 	for !p.eof() {
 		// Peek but do NOT skip comments/empty here because empty lines may indicate body begins
 		raw := p.peek()
 		trim := strings.TrimSpace(raw)
+
+		if isMultilineStringBody && trim == "```" {
+			break
+		}
+
+		if !isMultilineStringBody && json.Valid([]byte(strings.Join(req.Body.Value, "\n"))) {
+			break
+		}
 
 		// If response or next request begins, break
 		if reResponseLine.MatchString(trim) {
@@ -120,6 +130,10 @@ func (p *Parser) parseRequest() (*Request, error) {
 		if trim == "" || strings.HasPrefix(trim, "#") {
 			p.i++
 			continue
+		}
+
+		if len(req.Body.Value) == 0 && strings.HasPrefix(trim, "```") {
+			isMultilineStringBody = true
 		}
 
 		req.Body.Value = append(req.Body.Value, raw)

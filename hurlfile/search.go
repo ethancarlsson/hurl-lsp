@@ -128,3 +128,17 @@ func canUseFilterOnLine(sec Section, line, col int) bool {
 
 	return true
 }
+
+// Used to check if user is starting to write the response
+func (hf *HurlFile) OnEmptyResponse(line, col int) bool {
+	for _, entry := range hf.Entries {
+		bodyRange := entry.Request.Body.Range
+		if line > bodyRange.EndLine &&
+			entry.Response == nil &&
+			line < entry.Range.EndLine {
+			return true
+		}
+	}
+
+	return false
+}

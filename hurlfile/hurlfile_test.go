@@ -22,8 +22,9 @@ func TestParse(t *testing.T) {
 		expect.Equals(t, 4, hf.Entries[0].Request.Method.Range.EndCol)
 		expect.Equals(t, "{{url}}/people", hf.Entries[0].Request.Target.Target)
 		expect.Equals(t, 0, hf.Range.StartLine)
-		expect.Equals(t, 12, hf.Range.EndLine)
+		expect.Equals(t, 13, hf.Range.EndLine)
 
+		expect.Equals(t, 0, hf.Entries[0].Request.Range.StartLine)
 		expect.Equals(t, 7, hf.Entries[0].Response.Range.StartLine)
 		expect.Equals(t, 8, hf.Entries[0].Response.Sections[0].Range.StartLine)
 		expect.Equals(t, 10, hf.Entries[0].Response.Sections[0].Range.EndLine)
@@ -86,12 +87,14 @@ func TestParse(t *testing.T) {
 			t,
 			[]string{"{", `	"hello": "test"`, "}"},
 			hf.Entries[0].Request.Body.Value)
+		expect.Equals(t, 5, hf.Entries[0].Request.Body.Range.EndLine)
 
 		expect.Equals(t, 0, hf.Range.StartLine)
-		expect.Equals(t, 8, hf.Range.EndLine)
+		expect.Equals(t, 10, hf.Range.EndLine)
 
 		expect.Equals(t, 1, hf.Entries[0].Request.Range.StartLine)
 		expect.Equals(t, 5, hf.Entries[0].Request.Range.EndLine)
+		expect.Equals(t, 7, hf.Entries[0].Range.EndLine)
 
 		expect.Equals(t, 3, hf.Entries[0].Request.Body.Range.StartLine)
 		expect.Equals(t, 0, hf.Entries[0].Request.Body.Range.StartCol)
@@ -100,18 +103,23 @@ func TestParse(t *testing.T) {
 		expect.Equals(t, 2, hf.Entries[0].Request.Headers.Range.StartLine)
 		expect.Equals(t, 2, hf.Entries[0].Request.Headers.Range.EndLine)
 
-		expect.Equals(t, 6, hf.Entries[1].Range.StartLine)
-		expect.Equals(t, 8, hf.Entries[1].Range.EndLine)
+		expect.Equals(t, false, hf.OnEmptyResponse(5, 0))
+		expect.Equals(t, true, hf.OnEmptyResponse(6, 0))
+		expect.Equals(t, false, hf.OnEmptyResponse(7, 0))
 
-		expect.Equals(t, 7, hf.Entries[1].Response.Range.StartLine)
-		expect.Equals(t, 8, hf.Entries[1].Response.Range.EndLine)
-		expect.Equals(t, 8, hf.Entries[1].Response.Sections[0].Range.StartLine)
-		expect.Equals(t, 8, hf.Entries[1].Response.Sections[0].Range.EndLine)
+		expect.Equals(t, 7, hf.Entries[1].Range.StartLine)
+		expect.Equals(t, 7, hf.Entries[1].Request.Range.StartLine)
+		expect.Equals(t, 10, hf.Entries[1].Range.EndLine)
+
+		expect.Equals(t, 8, hf.Entries[1].Response.Range.StartLine)
+		expect.Equals(t, 9, hf.Entries[1].Response.Range.EndLine)
+		expect.Equals(t, 9, hf.Entries[1].Response.Sections[0].Range.StartLine)
+		expect.Equals(t, 9, hf.Entries[1].Response.Sections[0].Range.EndLine)
 
 		expect.Equals(t, 1, hf.Entries[1].Response.Sections[0].Name.Range.StartCol)
 		expect.Equals(t, 3, hf.Entries[1].Response.Sections[0].Name.Range.EndCol)
-		expect.Equals(t, 8, hf.Entries[1].Response.Sections[0].Name.Range.StartLine)
-		expect.Equals(t, 8, hf.Entries[1].Response.Sections[0].Range.EndLine)
+		expect.Equals(t, 9, hf.Entries[1].Response.Sections[0].Name.Range.StartLine)
+		expect.Equals(t, 9, hf.Entries[1].Response.Sections[0].Range.EndLine)
 	})
 
 	t.Run("file doesn't exist", func(t *testing.T) {
