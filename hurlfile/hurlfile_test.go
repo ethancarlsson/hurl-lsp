@@ -75,7 +75,7 @@ func TestParse(t *testing.T) {
 		hf, err := hurlfile.Parse(lines)
 		expect.NoErr(t, err)
 
-		expect.Equals(t, 2, len(hf.Entries))
+		expect.Equals(t, 4, len(hf.Entries))
 
 		expect.Equals(t, "PATCH", hf.Entries[0].Request.Method.Name)
 		expect.Equals(t, "GET", hf.Entries[1].Request.Method.Name)
@@ -90,7 +90,7 @@ func TestParse(t *testing.T) {
 		expect.Equals(t, 5, hf.Entries[0].Request.Body.Range.EndLine)
 
 		expect.Equals(t, 0, hf.Range.StartLine)
-		expect.Equals(t, 10, hf.Range.EndLine)
+		expect.Equals(t, 14, hf.Range.EndLine)
 
 		expect.Equals(t, 1, hf.Entries[0].Request.Range.StartLine)
 		expect.Equals(t, 5, hf.Entries[0].Request.Range.EndLine)
@@ -106,6 +106,9 @@ func TestParse(t *testing.T) {
 		expect.Equals(t, false, hf.OnEmptyResponse(5, 0))
 		expect.Equals(t, true, hf.OnEmptyResponse(6, 0))
 		expect.Equals(t, false, hf.OnEmptyResponse(7, 0))
+		expect.Equals(t, true, hf.OnEmptyResponse(11, 0))
+		expect.Equals(t, false, hf.OnEmptyResponse(12, 0))
+		expect.Equals(t, true, hf.OnEmptyResponse(13, 0))
 
 		expect.Equals(t, 7, hf.Entries[1].Range.StartLine)
 		expect.Equals(t, 7, hf.Entries[1].Request.Range.StartLine)

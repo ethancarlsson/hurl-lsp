@@ -161,6 +161,10 @@ func completion(context *glsp.Context, params *protocol.CompletionParams) (any, 
 		items = completions.AddRespSection(items)
 	}
 
+	if hf.OnEmptyResponse(line, col) {
+		items = completions.AddRespVersion(items)
+	}
+
 	if caps := hf.Captures().Before(line); len(caps) > 0 {
 		items = completions.AddVars(items, caps.Variables())
 	}

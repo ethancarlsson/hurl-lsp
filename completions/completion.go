@@ -73,6 +73,21 @@ func AddRespSection(items []protocol.CompletionItem) []protocol.CompletionItem {
 	return items
 }
 
+func AddRespVersion(items []protocol.CompletionItem) []protocol.CompletionItem {
+	kind := protocol.CompletionItemKindEnumMember
+
+	for _, version := range []string{"HTTP", "HTTP/1.0", "HTTP/1.1", "HTTP/2", "HTTP/3"} {
+		insertText := version + " " // add space so that user can start input
+		items = append(items, protocol.CompletionItem{
+			Label:      version,
+			Kind:       &kind,
+			InsertText: &insertText,
+		})
+	}
+
+	return items
+}
+
 func AddVars(items []protocol.CompletionItem, vars []string) []protocol.CompletionItem {
 	kind := protocol.CompletionItemKindVariable
 

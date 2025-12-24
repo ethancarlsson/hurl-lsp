@@ -8,3 +8,7 @@ Authorization: Bearer {{jwt}}
 		 GET https://example.com
 HTTP/1.1 201
 [Cap]
+GET https://example.com
+
+GET https://example.com
+
