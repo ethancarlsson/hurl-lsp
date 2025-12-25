@@ -173,23 +173,27 @@ func completion(context *glsp.Context, params *protocol.CompletionParams) (any, 
 		items = completions.AddFilters(items)
 	}
 
-	items = addRequestAwareCompletions(items, line, col)
+	items = addSpecAwareCompletions(items, line, col)
 
 	return items, nil
 }
 
-func addRequestAwareCompletions(items []protocol.CompletionItem, line, col int) []protocol.CompletionItem {
+func addSpecAwareCompletions(items []protocol.CompletionItem, line, col int) []protocol.CompletionItem {
 	if !hf.OnUri(line, col) {
 		return items
 	}
 
 	req := hf.GetReq(line, col)
-	op := oai.GetOp(req.Method.Name, req.Target.Target)
+	op := oai.GetOp(req.Method.Name, strings.ReplaceAll(strings.ReplaceAll(req.Target.Target, "{{", "{"), "}}", "}"))
 
 	if op.NotDocumented() {
 		items = completions.AddPaths(items, oai.PathList())
 
+		// nothing else can be done with this if it's not documented
 		return items
+	} else {
+		items = completions.AddPaths(items, oai.ChildPaths(op))
+		fmt.Printf("%v\n", oai.ChildPaths(op))
 	}
 
 	items = completions.AddParams(items, op.Detail.Parameters.In("query").ToDocMap())

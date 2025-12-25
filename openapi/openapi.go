@@ -33,6 +33,23 @@ func (o OAI) PathList() []string {
 	return paths
 }
 
+func (o OAI) ChildPaths(op Op) []string {
+	if len(o.Paths) == 0 {
+		return []string{}
+	}
+
+	paths := make([]string, 0, len(o.Paths)-1)
+
+	for p := range o.Paths {
+		child := strings.TrimPrefix(p, op.Path)
+		if child != "" && child != p {
+			paths = append(paths, child)
+		}
+	}
+
+	return paths
+}
+
 type OpDetail struct {
 	Summary     string   `json:"summary"`
 	Description string   `json:"description"`
