@@ -3,6 +3,7 @@ package openapi
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
 	"strings"
 
@@ -16,6 +17,20 @@ var (
 type OAI struct {
 	Paths       map[string]json.RawMessage `json:"paths"`
 	pathRegexps map[string]*regexp.Regexp
+}
+
+func New() OAI {
+	return OAI{
+		Paths:       make(map[string]json.RawMessage),
+		pathRegexps: make(map[string]*regexp.Regexp),
+	}
+}
+
+func (o OAI) Merge(other OAI) OAI {
+	maps.Copy(o.Paths, other.Paths)
+	maps.Copy(o.pathRegexps, other.pathRegexps)
+
+	return o
 }
 
 func (o OAI) PathList() []string {

@@ -12,7 +12,7 @@ func TestCompletion(t *testing.T) {
 	ctx := glsp.Context{}
 
 	t.Cleanup(func() {
-		conf.OpenapiDefPath = ""
+		conf.OpenapiDefPaths = []oaiPath{}
 	})
 
 	t.Run("no hurlfile", func(t *testing.T) {
@@ -100,7 +100,7 @@ func TestCompletion(t *testing.T) {
 	})
 
 	t.Run("uri completions from openapi paths", func(t *testing.T) {
-		conf.OpenapiDefPath = "./fixtures/petstore.yaml"
+		conf.OpenapiDefPaths = []oaiPath{"./fixtures/petstore.yaml"}
 		params := &protocol.CompletionParams{
 			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
 				TextDocument: protocol.TextDocumentIdentifier{

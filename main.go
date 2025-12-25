@@ -34,7 +34,7 @@ func (p oaiPath) Ft() string {
 }
 
 type config struct {
-	OpenapiDefPath oaiPath `json:"openapi_def"`
+	OpenapiDefPaths []oaiPath `json:"openapi_def"`
 }
 
 var (
@@ -193,7 +193,6 @@ func addSpecAwareCompletions(items []protocol.CompletionItem, line, col int) []p
 		return items
 	} else {
 		items = completions.AddPaths(items, oai.ChildPaths(op))
-		fmt.Printf("%v\n", oai.ChildPaths(op))
 	}
 
 	items = completions.AddParams(items, op.Detail.Parameters.In("query").ToDocMap())
@@ -224,7 +223,7 @@ func initialized(context *glsp.Context, params *protocol.InitializedParams) erro
 		return err
 	}
 
-	if conf.OpenapiDefPath == "" {
+	if len(conf.OpenapiDefPaths) == 0 {
 		return nil
 	}
 
@@ -234,27 +233,32 @@ func initialized(context *glsp.Context, params *protocol.InitializedParams) erro
 }
 
 func parseOpenapi() {
-	fileContent, err := os.ReadFile(string(conf.OpenapiDefPath))
-	if err != nil {
-		if m := commonlog.NewErrorMessage(0); m != nil {
-			m.Set("_message", "Could not read openapi file").
-				Set("err", err).Send()
+	combinedOpenapiDef := openapi.New()
+	for _, defPath := range conf.OpenapiDefPaths {
+		fileContent, err := os.ReadFile(string(defPath))
+		if err != nil {
+			if m := commonlog.NewErrorMessage(0); m != nil {
+				m.Set("_message", "Could not read openapi file").
+					Set("err", err).Send()
+			}
+			errs = append(errs, err)
+			return
 		}
-		errs = append(errs, err)
-		return
+
+		openAPI, err := openapi.Parse(defPath.Ft(), fileContent)
+		if err != nil {
+			if m := commonlog.NewErrorMessage(0); m != nil {
+				m.Set("_message", "Could not parse openapi file").
+					Set("err", err).Send()
+			}
+			errs = append(errs, err)
+			return
+		}
+
+		combinedOpenapiDef = combinedOpenapiDef.Merge(openAPI)
 	}
 
-	openAPI, err := openapi.Parse(conf.OpenapiDefPath.Ft(), fileContent)
-	if err != nil {
-		if m := commonlog.NewErrorMessage(0); m != nil {
-			m.Set("_message", "Could not parse openapi file").
-				Set("err", err).Send()
-		}
-		errs = append(errs, err)
-		return
-	}
-
-	oai = openAPI
+	oai = combinedOpenapiDef
 }
 
 func shutdown(context *glsp.Context) error {
