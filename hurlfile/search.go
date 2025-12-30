@@ -1,5 +1,7 @@
 package hurlfile
 
+import "strings"
+
 func (hf HurlFile) OnMethod(line, col int) bool {
 	// 3 is the length of the smallest method
 	if line == 0 && col <= 3 {
@@ -134,7 +136,15 @@ func (hf *HurlFile) OnEmptyResponse(line, col int) bool {
 		return false
 	}
 
-	if line == hf.Range.EndLine-1 && hf.Entries[len(hf.Entries)-1].Response == nil {
+	// If there is only one request and the last line of the request body is empty
+	// then we consider it on an empty response
+	firstReqBody := hf.Entries[len(hf.Entries)-1].Request.Body.Value
+	firstLastLine := ""
+	if len(firstReqBody) > 0 {
+		firstLastLine = strings.TrimSpace(firstReqBody[len(firstReqBody)-1])
+	}
+
+	if line == hf.Range.EndLine-1 && hf.Entries[len(hf.Entries)-1].Response == nil && firstLastLine == "" {
 		return true
 	}
 
