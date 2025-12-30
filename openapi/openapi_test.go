@@ -21,24 +21,66 @@ func TestParse(t *testing.T) {
 }
 
 func TestGetOp(t *testing.T) {
+	petReqBody := openapi.RequestBody{
+		Content: openapi.RequestBodyContent{
+			Json: openapi.BodySchema{
+				Schema: openapi.Schema{
+					Type: "object",
+					Ref:  "#/components/schemas/Pet",
+					Properties: map[string]openapi.Schema{
+						"category": {
+							Ref:  "#/components/schemas/Category",
+							Type: "object",
+							Properties: map[string]openapi.Schema{
+								"id": {
+									Type: "integer",
+								},
+								"name": {
+									Type: "string",
+								},
+							},
+						},
+						"id": {
+							Type: "integer",
+						},
+						"name": {
+							Type: "string",
+						},
+						"photoUrls": {
+							Type: "array",
+						},
+						"status": {
+							Type: "string",
+						},
+						"tags": {
+							Type: "array",
+						},
+					},
+				},
+			},
+		},
+	}
 	tests := []struct {
 		method, path, expectMethod, expectPath, expectSummary, expectDesc string
+		expectRequestBody                                                 openapi.RequestBody
 	}{
 		{
-			method:        "post",
-			path:          "/pet",
-			expectMethod:  "post",
-			expectPath:    "/pet",
-			expectSummary: "Add a new pet to the store.",
-			expectDesc:    "Add a new pet to the store.",
+			method:            "post",
+			path:              "/pet",
+			expectMethod:      "post",
+			expectPath:        "/pet",
+			expectSummary:     "Add a new pet to the store.",
+			expectDesc:        "Add a new pet to the store.",
+			expectRequestBody: petReqBody,
 		},
 		{
-			method:        "put",
-			path:          "/pet",
-			expectMethod:  "put",
-			expectPath:    "/pet",
-			expectSummary: "Update an existing pet.",
-			expectDesc:    "Update an existing pet by Id.",
+			method:            "put",
+			path:              "/pet",
+			expectMethod:      "put",
+			expectPath:        "/pet",
+			expectSummary:     "Update an existing pet.",
+			expectDesc:        "Update an existing pet by Id.",
+			expectRequestBody: petReqBody,
 		},
 		{
 			method:        "get",
@@ -71,6 +113,7 @@ func TestGetOp(t *testing.T) {
 			expect.Equals(t, tt.expectPath, op.Path)
 			expect.Equals(t, tt.expectSummary, op.Detail.Summary)
 			expect.Equals(t, tt.expectDesc, op.Detail.Description)
+			expect.Equals(t, tt.expectRequestBody, op.Detail.RequestBody)
 		})
 	}
 }

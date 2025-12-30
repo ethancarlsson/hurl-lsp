@@ -1,6 +1,8 @@
 package main
 
 import (
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/ethancarlsson/hurl-lsp/expect"
@@ -129,6 +131,39 @@ func TestCompletion(t *testing.T) {
 			}
 			_, ok := oai.Paths[item.Label]
 			expect.Equals(t, true, ok)
+		}
+	})
+
+	t.Run("request body completions", func(t *testing.T) {
+		conf.OpenapiDefPaths = []oaiPath{"./fixtures/petstore.yaml"}
+		params := &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{
+					URI: "./fixtures/test_request_body.hurl",
+				},
+				Position: protocol.Position{
+					Line:      3,
+					Character: 1,
+				},
+			},
+		}
+
+		parseOpenapi()
+		parseDocument(params.TextDocument.URI)
+
+		is, err := completion(&ctx, params)
+		expect.NoErr(t, err)
+
+		items := is.([]protocol.CompletionItem)
+		// 13 paths + the 2 captured variables
+		expectedPropertyNames := []string{"id", "name", "photoUrls",
+			"category", "tags", "status",
+		}
+		expect.Equals(t, len(expectedPropertyNames), len(items))
+		for _, item := range items {
+
+			expect.Equals(t, true, slices.Contains(
+				expectedPropertyNames, strings.Trim(item.Label, "\"")))
 		}
 	})
 }

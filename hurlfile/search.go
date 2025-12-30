@@ -20,8 +20,7 @@ func (hf HurlFile) OnMethod(line, col int) bool {
 
 func (hf HurlFile) GetReq(line, col int) Request {
 	for _, entry := range hf.Entries {
-		reqRange := entry.Request.Range
-		if line >= reqRange.StartLine && line <= reqRange.EndLine {
+		if line >= entry.Range.StartLine && line < entry.Range.EndLine {
 			return entry.Request
 		}
 	}
@@ -148,6 +147,21 @@ func (hf *HurlFile) OnEmptyResponse(line, col int) bool {
 		if line > bodyRange.EndLine &&
 			entry.Response == nil &&
 			line < entry.Range.EndLine {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (hf *HurlFile) OnRequestBody(line, col int) bool {
+	if len(hf.Entries) == 0 {
+		return false
+	}
+
+	for _, entry := range hf.Entries {
+		bodyRange := entry.Request.Body.Range
+		if line >= bodyRange.StartLine && line <= bodyRange.EndLine {
 			return true
 		}
 	}

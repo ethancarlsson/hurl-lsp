@@ -1,6 +1,7 @@
 package completions
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/ethancarlsson/hurl-lsp/builtin"
@@ -55,6 +56,29 @@ func AddPaths(items []protocol.CompletionItem, paths []string) []protocol.Comple
 		})
 	}
 
+	return items
+}
+
+func AddRequestBodyProperty(items []protocol.CompletionItem, name, typ string) []protocol.CompletionItem {
+	insertText := fmt.Sprintf(`"%s": `, name)
+	switch typ {
+	case "string":
+		insertText = insertText + `"$0"`
+	case "array":
+		insertText = insertText + "[$0]"
+	case "object":
+		insertText = insertText + "{$0}"
+	default:
+	}
+	kind := protocol.CompletionItemKindProperty
+	format := protocol.InsertTextFormatSnippet
+	items = append(items, protocol.CompletionItem{
+		Label:            `"` + name + `"`,
+		Detail:           &typ,
+		Kind:             &kind,
+		InsertTextFormat: &format,
+		InsertText:       &insertText,
+	})
 	return items
 }
 

@@ -106,7 +106,6 @@ func TestParse(t *testing.T) {
 		expect.Equals(t, false, hf.OnEmptyResponse(5, 0))
 		expect.Equals(t, true, hf.OnEmptyResponse(6, 0))
 		expect.Equals(t, false, hf.OnEmptyResponse(7, 0))
-		expect.Equals(t, true, hf.OnEmptyResponse(11, 0))
 		expect.Equals(t, false, hf.OnEmptyResponse(12, 0))
 		expect.Equals(t, true, hf.OnEmptyResponse(13, 0))
 

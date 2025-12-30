@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/goccy/go-yaml"
@@ -16,12 +17,20 @@ var (
 
 type OAI struct {
 	Paths       map[string]json.RawMessage `json:"paths"`
+	Components  Components                 `json:"components"`
 	pathRegexps map[string]*regexp.Regexp
+}
+
+type Components struct {
+	Schemas map[string]Schema `json:"schemas"`
 }
 
 func New() OAI {
 	return OAI{
-		Paths:       make(map[string]json.RawMessage),
+		Paths: make(map[string]json.RawMessage),
+		Components: Components{
+			Schemas: make(map[string]Schema),
+		},
 		pathRegexps: make(map[string]*regexp.Regexp),
 	}
 }
@@ -29,6 +38,7 @@ func New() OAI {
 func (o OAI) Merge(other OAI) OAI {
 	maps.Copy(o.Paths, other.Paths)
 	maps.Copy(o.pathRegexps, other.pathRegexps)
+	maps.Copy(o.Components.Schemas, other.Components.Schemas)
 
 	return o
 }
@@ -66,9 +76,22 @@ func (o OAI) ChildPaths(op Op) []string {
 }
 
 type OpDetail struct {
-	Summary     string   `json:"summary"`
-	Description string   `json:"description"`
-	Parameters  OpParams `json:"parameters"`
+	Summary     string      `json:"summary"`
+	Description string      `json:"description"`
+	Parameters  OpParams    `json:"parameters"`
+	RequestBody RequestBody `json:"requestBody"`
+}
+
+type RequestBody struct {
+	Content RequestBodyContent `json:"content"`
+}
+
+type RequestBodyContent struct {
+	Json BodySchema `json:"application/json"`
+}
+
+type BodySchema struct {
+	Schema Schema `json:"schema"`
 }
 
 type OpParams []OpParam
@@ -100,7 +123,9 @@ type OpParam struct {
 }
 
 type Schema struct {
-	Type string `json:"type"`
+	Type       string            `json:"type"`
+	Properties map[string]Schema `json:"properties"`
+	Ref        string            `json:"$ref"`
 }
 
 type Op struct {
@@ -113,6 +138,50 @@ const undocumentedOpSummary = "Operation not documented"
 
 func (o Op) NotDocumented() bool {
 	return o.Detail.Summary == undocumentedOpSummary
+}
+
+func (o OAI) resolveSchemaRef(schema Schema) Schema {
+	splitRefPtr := strings.Split(schema.Ref, "/")
+
+	schemasI := slices.Index(splitRefPtr, "schemas")
+	if schemasI == -1 {
+		return schema
+	}
+
+	// Don't try and reach cases where the ref looks like "#/components/schemas/"
+	// i.e. with no actual schema
+	if len(splitRefPtr) < schemasI {
+		return schema
+	}
+
+	schemaKey := splitRefPtr[schemasI+1]
+	refedSchema, ok := o.Components.Schemas[schemaKey]
+	if !ok {
+		return schema
+	}
+
+	if schema.Type == "" {
+		schema.Type = refedSchema.Type
+	}
+
+	if schema.Properties == nil {
+		schema.Properties = make(map[string]Schema)
+	}
+	if refedSchema.Properties == nil {
+		refedSchema.Properties = make(map[string]Schema)
+	}
+
+	maps.Copy(schema.Properties, refedSchema.Properties)
+
+	for k, prop := range schema.Properties {
+		if prop.Ref == "" {
+			continue
+		}
+
+		schema.Properties[k] = o.resolveSchemaRef(prop)
+	}
+
+	return schema
 }
 
 func (o OAI) GetOp(method, path string) Op {
@@ -133,7 +202,6 @@ func (o OAI) GetOp(method, path string) Op {
 		}
 
 		match := reg.MatchString(path)
-		// println("reg", reg.String(), "path", path, "match", match)
 		if match {
 			rawPathContent = content
 			longestMatching = len(pInSpec)
@@ -185,7 +253,9 @@ func (o OAI) GetOp(method, path string) Op {
 		return op
 	}
 
+	opDetail.RequestBody.Content.Json.Schema = o.resolveSchemaRef(opDetail.RequestBody.Content.Json.Schema)
 	op.Detail = opDetail
+
 	return op
 }
 

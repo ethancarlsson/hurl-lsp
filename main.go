@@ -179,12 +179,47 @@ func completion(context *glsp.Context, params *protocol.CompletionParams) (any, 
 }
 
 func addSpecAwareCompletions(items []protocol.CompletionItem, line, col int) []protocol.CompletionItem {
-	if !hf.OnUri(line, col) {
+	req := hf.GetReq(line, col)
+	op := oai.GetOp(req.Method.Name, strings.ReplaceAll(strings.ReplaceAll(req.Target.Target, "{{", "{"), "}}", "}"))
+
+	items = addUriCompletions(items, op, line, col)
+	items = addBodyCompletions(items, req, op, line, col)
+
+	return items
+}
+
+func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, op openapi.Op, line, col int) []protocol.CompletionItem {
+	if !hf.OnRequestBody(line, col) {
 		return items
 	}
 
-	req := hf.GetReq(line, col)
-	op := oai.GetOp(req.Method.Name, strings.ReplaceAll(strings.ReplaceAll(req.Target.Target, "{{", "{"), "}}", "}"))
+	props := op.Detail.RequestBody.Content.Json.Schema.Properties
+
+	if len(props) == 0 {
+		return items
+	}
+
+	currLine := line - req.Body.Range.StartLine
+	if len(req.Body.Value)-1 < currLine {
+		return items
+	}
+
+	fmt.Printf("line: %v\nprops: %v\n", req.Body.Value[currLine], props)
+	if strings.TrimSpace(req.Body.Value[currLine]) != "" {
+		return items
+	}
+
+	for name, schema := range props {
+		items = completions.AddRequestBodyProperty(items, name, schema.Type)
+	}
+
+	return items
+}
+
+func addUriCompletions(items []protocol.CompletionItem, op openapi.Op, line, col int) []protocol.CompletionItem {
+	if !hf.OnUri(line, col) {
+		return items
+	}
 
 	if op.NotDocumented() {
 		items = completions.AddPaths(items, oai.PathList())

@@ -79,7 +79,6 @@ func (p *Parser) parseRequest() (*Request, error) {
 
 	isMultilineStringBody := false
 	for !p.eof() {
-		// Peek but do NOT skip comments/empty here because empty lines may indicate body begins
 		raw := p.peek()
 		trim := strings.TrimSpace(raw)
 
@@ -123,12 +122,6 @@ func (p *Parser) parseRequest() (*Request, error) {
 			k, v := splitHeader(raw)
 			req.Headers.Value[k] = v
 			req.Headers.Range.EndCol = len(raw) - 1
-			continue
-		}
-
-		// consume empty or comment line
-		if trim == "" || strings.HasPrefix(trim, "#") {
-			p.i++
 			continue
 		}
 
