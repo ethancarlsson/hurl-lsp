@@ -138,10 +138,10 @@ func (hf *HurlFile) OnEmptyResponse(line, col int) bool {
 
 	// If there is only one request and the last line of the request body is empty
 	// then we consider it on an empty response
-	firstReqBody := hf.Entries[len(hf.Entries)-1].Request.Body.Value
+	lastReqBody := hf.Entries[len(hf.Entries)-1].Request.Body.Value
 	firstLastLine := ""
-	if len(firstReqBody) > 0 {
-		firstLastLine = strings.TrimSpace(firstReqBody[len(firstReqBody)-1])
+	if len(lastReqBody) > 0 {
+		firstLastLine = strings.TrimSpace(lastReqBody[len(lastReqBody)-1])
 	}
 
 	if line == hf.Range.EndLine-1 && hf.Entries[len(hf.Entries)-1].Response == nil && firstLastLine == "" {

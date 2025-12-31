@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unicode"
 
 	"github.com/ethancarlsson/hurl-lsp/completions"
 	"github.com/ethancarlsson/hurl-lsp/hurlfile"
@@ -204,16 +205,53 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 		return items
 	}
 
-	fmt.Printf("line: %v\nprops: %v\n", req.Body.Value[currLine], props)
+	var propsMap map[string]any
+	reqBody := cleanTrailingCommas(strings.Join(req.Body.Value, "\n"))
+
+	err := json.Unmarshal([]byte(reqBody), &propsMap)
+	if err != nil {
+		return items
+	}
+
 	if strings.TrimSpace(req.Body.Value[currLine]) != "" {
 		return items
 	}
 
 	for name, schema := range props {
+		if _, isAlreadyThere := propsMap[name]; isAlreadyThere {
+			continue
+		}
+
 		items = completions.AddRequestBodyProperty(items, name, schema.Type)
 	}
 
 	return items
+}
+
+// This goes through and removes any trailing commas in a JSON string. This allows
+// the tool to work with partially broken JSON which is very common when a user might
+// be adding a new property to the object or array.
+func cleanTrailingCommas(jsonStr string) string {
+	lookingForComma := false
+	splitStr := strings.Split(jsonStr, "")
+	for i := len(splitStr) - 1; i > 0; i-- {
+		if splitStr[i] == "}" || splitStr[i] == "]" {
+			lookingForComma = true
+			continue
+		}
+
+		if unicode.IsSpace(rune(jsonStr[i])) {
+			continue
+		}
+
+		if lookingForComma == true && splitStr[i] == "," {
+			splitStr[i] = ""
+		}
+
+		lookingForComma = false
+	}
+
+	return strings.Join(splitStr, "")
 }
 
 func addUriCompletions(items []protocol.CompletionItem, op openapi.Op, line, col int) []protocol.CompletionItem {

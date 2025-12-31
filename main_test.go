@@ -155,8 +155,7 @@ func TestCompletion(t *testing.T) {
 		expect.NoErr(t, err)
 
 		items := is.([]protocol.CompletionItem)
-		// 13 paths + the 2 captured variables
-		expectedPropertyNames := []string{"id", "name", "photoUrls",
+		expectedPropertyNames := []string{"id", "photoUrls",
 			"category", "tags", "status",
 		}
 		expect.Equals(t, len(expectedPropertyNames), len(items))
