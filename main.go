@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
-	"unicode"
 
 	"github.com/ethancarlsson/hurl-lsp/completions"
 	"github.com/ethancarlsson/hurl-lsp/hurlfile"
 	"github.com/ethancarlsson/hurl-lsp/openapi"
+	"github.com/ethancarlsson/hurl-lsp/rawjson"
 	"github.com/ethancarlsson/hurl-lsp/signaturehelp"
 	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
@@ -207,13 +206,13 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 	}
 
 	var propsMap map[string]json.RawMessage
-	reqBody := cleanTrailingCommas(strings.Join(req.Body.Value, "\n"))
+	reqBody := rawjson.CleanTrailingCommas(strings.Join(req.Body.Value, "\n"))
 
 	if err := json.Unmarshal([]byte(reqBody), &propsMap); err != nil {
 		return items
 	}
 
-	schemaPath := pathToObj(req.Body.Value, currLine, col)
+	schemaPath := rawjson.PathToObj(req.Body.Value, currLine, col)
 	for _, path := range schemaPath {
 		innerSchema, ok := props[path]
 		if !ok {
@@ -241,100 +240,6 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 	}
 
 	return items
-}
-
-func pathToObj(lines []string, currLine, currCol int) []string {
-	path := make([]string, 0)
-
-	expectedPathLen := 0
-
-	for i := currLine; i < len(lines); i++ {
-		for j := currCol; j < len(lines[i]); j++ {
-			if lines[i][j] == '}' {
-				expectedPathLen += 1
-			} else if lines[i][j] == '{' {
-				expectedPathLen -= 1
-			}
-		}
-
-		// not on last line
-		if i < len(lines)-1 {
-			currCol = 0
-		}
-	}
-
-	// used to keep track of how many of '}' character has been seen since the
-	// last '{' character
-	endBraceCount := 0
-	for i := currLine; i >= 0; i-- {
-		lookingForObjName := false
-		objPathName := make([]byte, 0)
-
-		for j := currCol; j > 0; j-- {
-			currChar := lines[i][j]
-
-			if currChar == '}' && !lookingForObjName {
-				endBraceCount += 1
-				continue
-			}
-
-			if currChar == '{' {
-				lookingForObjName = endBraceCount == 0
-				endBraceCount -= 1
-				continue
-			}
-
-			if lookingForObjName && (unicode.IsSpace(rune(currChar)) || string(currChar) == ":" || string(currChar) == "\"") {
-				continue
-			}
-
-			if lookingForObjName && (unicode.IsLetter(rune(currChar)) || unicode.IsNumber(rune(currChar))) {
-				objPathName = append(objPathName, currChar)
-				continue
-			}
-
-			lookingForObjName = false
-		}
-
-		if i > 0 {
-			currCol = len(lines[i-1]) - 1
-		}
-
-		if len(objPathName) > 0 {
-			slices.Reverse(objPathName)
-			path = append(path, string(objPathName))
-			endBraceCount = 0
-		}
-	}
-
-	slices.Reverse(path)
-	return path
-}
-
-// This goes through and removes any trailing commas in a JSON string. This allows
-// the tool to work with partially broken JSON which is very common when a user might
-// be adding a new property to the object or array.
-func cleanTrailingCommas(jsonStr string) string {
-	lookingForComma := false
-	splitStr := strings.Split(jsonStr, "")
-	for i := len(splitStr) - 1; i >= 0; i-- {
-		if splitStr[i] == "}" || splitStr[i] == "]" {
-			lookingForComma = true
-			continue
-		}
-
-		if unicode.IsSpace(rune(jsonStr[i])) {
-			continue
-		}
-
-		if lookingForComma == true && splitStr[i] == "," {
-			splitStr[i] = ""
-		}
-
-		lookingForComma = false
-	}
-
-	return strings.Join(splitStr, "")
 }
 
 func addUriCompletions(items []protocol.CompletionItem, op openapi.Op, line, col int) []protocol.CompletionItem {
