@@ -142,7 +142,7 @@ func TestCompletion(t *testing.T) {
 					URI: "./fixtures/test_request_body.hurl",
 				},
 				Position: protocol.Position{
-					Line:      3,
+					Line:      6,
 					Character: 1,
 				},
 			},
@@ -156,13 +156,159 @@ func TestCompletion(t *testing.T) {
 
 		items := is.([]protocol.CompletionItem)
 		expectedPropertyNames := []string{"id", "photoUrls",
-			"category", "tags", "status",
+			"status", "tags",
 		}
 		expect.Equals(t, len(expectedPropertyNames), len(items))
+		itemNames := make([]string, 0, len(expectedPropertyNames))
 		for _, item := range items {
-
-			expect.Equals(t, true, slices.Contains(
-				expectedPropertyNames, strings.Trim(item.Label, "\"")))
+			itemNames = append(itemNames, strings.Trim(item.Label, "\""))
 		}
+
+		slices.Sort(itemNames)
+
+		expect.Equals(t, expectedPropertyNames, itemNames)
 	})
+
+	t.Run("request body completion inner object", func(t *testing.T) {
+		conf.OpenapiDefPaths = []oaiPath{"./fixtures/petstore.yaml"}
+		params := &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{
+					URI: "./fixtures/test_request_body.hurl",
+				},
+				Position: protocol.Position{
+					Line:      4,
+					Character: 1,
+				},
+			},
+		}
+
+		parseOpenapi()
+		parseDocument(params.TextDocument.URI)
+
+		is, err := completion(&ctx, params)
+		expect.NoErr(t, err)
+
+		items := is.([]protocol.CompletionItem)
+		expectedPropertyNames := []string{"id", "name"}
+		itemNames := make([]string, 0, len(expectedPropertyNames))
+		for _, item := range items {
+			itemNames = append(itemNames, strings.Trim(item.Label, "\""))
+		}
+
+		slices.Sort(itemNames)
+
+		expect.Equals(t, expectedPropertyNames, itemNames)
+	})
+
+}
+
+func TestPathToObj(t *testing.T) {
+	tests := []struct {
+		name              string
+		jsonLines         string
+		currLine, currCol int
+		expectedPath      []string
+	}{
+		{
+			name: "highest level",
+			jsonLines: `{
+	"name": "Fido",
+	"category": {
+
+	},
+
+}`,
+			currLine:     0,
+			currCol:      0,
+			expectedPath: []string{},
+		},
+		{
+			name: "nested",
+			jsonLines: `{
+	"name": "Fido",
+	"category": {
+
+	},
+
+}`,
+			currLine:     3,
+			currCol:      0,
+			expectedPath: []string{"category"},
+		},
+		{
+			name: "deeply nested",
+			jsonLines: `{
+	"name": "Fido",
+	"category": {
+		"inner1": {
+			"inner2": {
+				"inner3": {
+
+				}
+			}
+		}
+	}
+}`,
+			currLine:     6,
+			currCol:      0,
+			expectedPath: []string{"category", "inner1", "inner2", "inner3"},
+		},
+		{
+			name: "partial nesting",
+			jsonLines: `{
+	"name": "Fido",
+	"category": {
+		"inner1": {
+
+			"inner2": {
+				"inner3": {
+
+				}
+			}
+		}
+	}
+}`,
+			currLine:     4,
+			currCol:      0,
+			expectedPath: []string{"category", "inner1"},
+		},
+		{
+			name: "highest level at the bottom",
+			jsonLines: `{
+	"name": "Fido",
+	"category": {
+
+	},
+
+}`,
+			currLine:     5,
+			currCol:      0,
+			expectedPath: []string{},
+		},
+		{
+			name: "with sibling objects",
+			jsonLines: `{
+	"name": "Fido",
+	"1sib": {},
+	"2sib": {},
+	"3sib": {},
+	"category": {
+
+	},
+
+}`,
+			currLine:     6,
+			currCol:      0,
+			expectedPath: []string{"category"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run("test path to json object : "+tt.name, func(t *testing.T) {
+			actual := pathToObj(strings.Split(tt.jsonLines, "\n"), tt.currLine, tt.currCol)
+
+			expect.Equals(t, tt.expectedPath, actual)
+		})
+	}
 }

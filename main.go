@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -205,16 +206,30 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 		return items
 	}
 
-	var propsMap map[string]any
+	var propsMap map[string]json.RawMessage
 	reqBody := cleanTrailingCommas(strings.Join(req.Body.Value, "\n"))
 
-	err := json.Unmarshal([]byte(reqBody), &propsMap)
-	if err != nil {
+	if err := json.Unmarshal([]byte(reqBody), &propsMap); err != nil {
 		return items
 	}
 
-	if strings.TrimSpace(req.Body.Value[currLine]) != "" {
-		return items
+	schemaPath := pathToObj(req.Body.Value, currLine, col)
+	for _, path := range schemaPath {
+		innerSchema, ok := props[path]
+		if !ok {
+			props = make(map[string]openapi.Schema, 0)
+			break
+		}
+		var innerPropMap map[string]json.RawMessage
+		innerJSON, ok := propsMap[path]
+		if ok {
+			if err := json.Unmarshal(innerJSON, &propsMap); err != nil {
+				break
+			}
+		}
+
+		propsMap = innerPropMap
+		props = innerSchema.Properties
 	}
 
 	for name, schema := range props {
@@ -228,13 +243,81 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 	return items
 }
 
+func pathToObj(lines []string, currLine, currCol int) []string {
+	path := make([]string, 0)
+
+	expectedPathLen := 0
+
+	for i := currLine; i < len(lines); i++ {
+		for j := currCol; j < len(lines[i]); j++ {
+			if lines[i][j] == '}' {
+				expectedPathLen += 1
+			} else if lines[i][j] == '{' {
+				expectedPathLen -= 1
+			}
+		}
+
+		// not on last line
+		if i < len(lines)-1 {
+			currCol = 0
+		}
+	}
+
+	// used to keep track of how many of '}' character has been seen since the
+	// last '{' character
+	endBraceCount := 0
+	for i := currLine; i >= 0; i-- {
+		lookingForObjName := false
+		objPathName := make([]byte, 0)
+
+		for j := currCol; j > 0; j-- {
+			currChar := lines[i][j]
+
+			if currChar == '}' && !lookingForObjName {
+				endBraceCount += 1
+				continue
+			}
+
+			if currChar == '{' {
+				lookingForObjName = endBraceCount == 0
+				endBraceCount -= 1
+				continue
+			}
+
+			if lookingForObjName && (unicode.IsSpace(rune(currChar)) || string(currChar) == ":" || string(currChar) == "\"") {
+				continue
+			}
+
+			if lookingForObjName && (unicode.IsLetter(rune(currChar)) || unicode.IsNumber(rune(currChar))) {
+				objPathName = append(objPathName, currChar)
+				continue
+			}
+
+			lookingForObjName = false
+		}
+
+		if i > 0 {
+			currCol = len(lines[i-1]) - 1
+		}
+
+		if len(objPathName) > 0 {
+			slices.Reverse(objPathName)
+			path = append(path, string(objPathName))
+			endBraceCount = 0
+		}
+	}
+
+	slices.Reverse(path)
+	return path
+}
+
 // This goes through and removes any trailing commas in a JSON string. This allows
 // the tool to work with partially broken JSON which is very common when a user might
 // be adding a new property to the object or array.
 func cleanTrailingCommas(jsonStr string) string {
 	lookingForComma := false
 	splitStr := strings.Split(jsonStr, "")
-	for i := len(splitStr) - 1; i > 0; i-- {
+	for i := len(splitStr) - 1; i >= 0; i-- {
 		if splitStr[i] == "}" || splitStr[i] == "]" {
 			lookingForComma = true
 			continue
