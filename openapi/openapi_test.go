@@ -22,6 +22,7 @@ func TestParse(t *testing.T) {
 
 func TestGetOp(t *testing.T) {
 	petReqBody := openapi.RequestBody{
+		Description: "Create a new pet in the store",
 		Content: openapi.RequestBodyContent{
 			Json: openapi.BodySchema{
 				Schema: openapi.Schema{
@@ -60,6 +61,9 @@ func TestGetOp(t *testing.T) {
 			},
 		},
 	}
+
+	petPutReqBody := petReqBody
+	petPutReqBody.Description = "Update an existent pet in the store"
 	tests := []struct {
 		method, path, expectMethod, expectPath, expectSummary, expectDesc string
 		expectRequestBody                                                 openapi.RequestBody
@@ -80,7 +84,7 @@ func TestGetOp(t *testing.T) {
 			expectPath:        "/pet",
 			expectSummary:     "Update an existing pet.",
 			expectDesc:        "Update an existing pet by Id.",
-			expectRequestBody: petReqBody,
+			expectRequestBody: petPutReqBody,
 		},
 		{
 			method:        "get",

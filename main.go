@@ -127,9 +127,9 @@ func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) 
 		return nil, nil
 	}
 
+	req := hf.GetReq(line, col)
+	op := oai.GetOp(req.Method.Name, req.Target.Target)
 	if hf.OnMethod(line, col) || hf.OnUri(line, col) {
-		req := hf.GetReq(line, col)
-		op := oai.GetOp(req.Method.Name, req.Target.Target)
 		help := protocol.SignatureHelp{Signatures: []protocol.SignatureInformation{
 			{
 				Label: op.Method + " " + op.Path,
@@ -138,6 +138,22 @@ func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) 
 					op.Detail.Summary, op.Detail.Description,
 				),
 				Parameters: signaturehelp.ParamsFromMap(op.Detail.Parameters.ToDocMap()),
+			},
+		},
+		}
+
+		return &help, nil
+	}
+
+	if hf.OnRequestBody(line, col) {
+		help := protocol.SignatureHelp{Signatures: []protocol.SignatureInformation{
+			{
+				Label: "Request body",
+				Documentation: fmt.Sprintf(
+					"Description: %s\nSchema: %s",
+					op.Detail.RequestBody.Description,
+					op.Detail.RequestBody.Content.Json.Schema.ToString(0),
+				),
 			},
 		},
 		}

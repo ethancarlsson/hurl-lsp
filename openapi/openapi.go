@@ -83,7 +83,8 @@ type OpDetail struct {
 }
 
 type RequestBody struct {
-	Content RequestBodyContent `json:"content"`
+	Description string             `json:"description"`
+	Content     RequestBodyContent `json:"content"`
 }
 
 type RequestBodyContent struct {
@@ -126,6 +127,15 @@ type Schema struct {
 	Type       string            `json:"type"`
 	Properties map[string]Schema `json:"properties"`
 	Ref        string            `json:"$ref"`
+}
+
+func (s Schema) ToString(indent int) string {
+	res := strings.Repeat(" ", indent) + s.Type
+	for k, p := range s.Properties {
+		res += "\n" + strings.Repeat(" ", indent+2) + "- " + k + ": " + p.ToString(indent+2)
+	}
+
+	return res
 }
 
 type Op struct {
