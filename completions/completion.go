@@ -59,7 +59,7 @@ func AddPaths(items []protocol.CompletionItem, paths []string) []protocol.Comple
 	return items
 }
 
-func AddRequestBodyProperty(items []protocol.CompletionItem, name, typ string) []protocol.CompletionItem {
+func AddRequestBodyProperty(items []protocol.CompletionItem, name, typ, suffix string) []protocol.CompletionItem {
 	insertText := fmt.Sprintf(`"%s": `, name)
 	switch typ {
 	case "string":
@@ -69,7 +69,10 @@ func AddRequestBodyProperty(items []protocol.CompletionItem, name, typ string) [
 	case "object":
 		insertText = insertText + "{$0}"
 	default:
+		insertText = insertText + "$0"
 	}
+
+	insertText += suffix
 	kind := protocol.CompletionItemKindProperty
 	format := protocol.InsertTextFormatSnippet
 	items = append(items, protocol.CompletionItem{

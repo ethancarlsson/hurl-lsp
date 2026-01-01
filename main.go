@@ -84,22 +84,6 @@ func documentDidChange(context *glsp.Context, params *protocol.DidChangeTextDocu
 	return nil
 }
 
-func parseDocument(uri string) error {
-	parsedLines, err := hurlfile.ParseLines(uri)
-	if err != nil {
-		return fmt.Errorf("Failed to parse the hurl file %w", err)
-	}
-
-	lines = parsedLines
-
-	hf, err = hurlfile.Parse(lines)
-	if err != nil {
-		return fmt.Errorf("Failed to parse the hurl file %w", err)
-	}
-
-	return nil
-}
-
 func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {
 	// Reparse on signatureHelp because 1) signatureHelp will not be called as often,
 	// and; 2) because we can end up 1 character behind when relying on onChanged
@@ -165,7 +149,6 @@ func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) 
 }
 
 func completion(context *glsp.Context, params *protocol.CompletionParams) (any, error) {
-
 	items := make([]protocol.CompletionItem, 0)
 	if hf == nil {
 		return items, nil
@@ -247,12 +230,18 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 		props = innerSchema.Properties
 	}
 
+	isOnLastProp := rawjson.IsOnLastProp(req.Body.Value, currLine, col)
+
 	for name, schema := range props {
 		if _, isAlreadyThere := propsMap[name]; isAlreadyThere {
 			continue
 		}
 
-		items = completions.AddRequestBodyProperty(items, name, schema.Type)
+		if isOnLastProp {
+			items = completions.AddRequestBodyProperty(items, name, schema.Type, "")
+		} else {
+			items = completions.AddRequestBodyProperty(items, name, schema.Type, ",")
+		}
 	}
 
 	return items
@@ -305,6 +294,22 @@ func initialized(context *glsp.Context, params *protocol.InitializedParams) erro
 	}
 
 	parseOpenapi()
+
+	return nil
+}
+
+func parseDocument(uri string) error {
+	parsedLines, err := hurlfile.ParseLines(uri)
+	if err != nil {
+		return fmt.Errorf("Failed to parse the hurl file %w", err)
+	}
+
+	lines = parsedLines
+
+	hf, err = hurlfile.Parse(lines)
+	if err != nil {
+		return fmt.Errorf("Failed to parse the hurl file %w", err)
+	}
 
 	return nil
 }

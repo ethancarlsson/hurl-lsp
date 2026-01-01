@@ -79,6 +79,29 @@ func PathToObj(lines []string, line, col int) []string {
 	return path
 }
 
+// Accepts lines, line, and col and returns true if adding a property at that
+// position will make it the last property in the JSON object.
+// It returns true if there are no characters between this position and the first
+// '}' character other than whitespace.
+func IsOnLastProp(lines []string, line, col int) bool {
+	for i := line; i < len(lines); i++ {
+		for j := col; j < len(lines[i]); j++ {
+			if lines[i][j] == '}' {
+				return true
+			} else if !unicode.IsSpace(rune(lines[i][j])) {
+				continue
+			} else {
+				return false
+			}
+		}
+
+		// move col to the front for the next line
+		col = 0
+	}
+
+	return false
+}
+
 // This goes through and removes any trailing commas in a JSON string. This allows
 // the tool to work with partially broken JSON which is very common when a user might
 // be adding a new property to the object or array.
