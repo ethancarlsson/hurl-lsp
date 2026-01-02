@@ -206,6 +206,7 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 
 	var propsMap map[string]json.RawMessage
 	reqBody := rawjson.CleanTrailingCommas(strings.Join(req.Body.Value, "\n"))
+	reqBody = rawjson.CleanVariables(reqBody)
 
 	if err := json.Unmarshal([]byte(reqBody), &propsMap); err != nil {
 		return items

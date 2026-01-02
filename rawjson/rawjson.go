@@ -4,6 +4,7 @@
 package rawjson
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -126,4 +127,16 @@ func CleanTrailingCommas(jsonStr string) string {
 	}
 
 	return strings.Join(splitStr, "")
+}
+
+var reHurlVariable = regexp.MustCompile("{{\\S+}}")
+
+// Takes in a string and replaces all hurl variables with "{}" this makes it possible
+// to parse the string as JSON. "{}" is chosen because it will be valid JSON even
+// in scenarios where the variable is wrapped in a string, e.g. both of these will
+// be replaced in a way that can be parsed as json:
+// - "id": {{id}}	-> "id": {}
+// - "name": "{{name}}"	-> "name": "{}"
+func CleanVariables(str string) string {
+	return string(reHurlVariable.ReplaceAll([]byte(str), []byte("{}")))
 }
