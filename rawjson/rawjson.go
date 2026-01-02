@@ -15,22 +15,8 @@ import (
 func PathToObj(lines []string, line, col int) []string {
 	path := make([]string, 0)
 
-	expectedPathLen := 0
-
-	for i := line; i < len(lines); i++ {
-		for j := col; j < len(lines[i]); j++ {
-			if lines[i][j] == '}' {
-				expectedPathLen += 1
-			} else if lines[i][j] == '{' {
-				expectedPathLen -= 1
-			}
-		}
-
-		// not on last line
-		if i < len(lines)-1 {
-			col = 0
-		}
-	}
+	// ignore col for now
+	col = 0
 
 	// used to keep track of how many of '}' character has been seen since the
 	// last '{' character
