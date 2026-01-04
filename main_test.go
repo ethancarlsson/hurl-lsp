@@ -147,6 +147,20 @@ func TestCompletion(t *testing.T) {
 				},
 			},
 		}
+		// {
+		// 	"name": "Fido",
+		// 	"category": {
+		//
+		// 	},
+		//	<- HERE
+		// 	"tags": [
+		// 		{
+		//
+		//		"name": "test"
+		// 		}
+		// 	]
+		// }
+		//
 
 		parseOpenapi()
 		parseDocument(params.TextDocument.URI)
@@ -156,7 +170,7 @@ func TestCompletion(t *testing.T) {
 
 		items := is.([]protocol.CompletionItem)
 		expectedPropertyNames := []string{"id", "photoUrls",
-			"status", "tags",
+			"status",
 		}
 		expect.Equals(t, len(expectedPropertyNames), len(items))
 		itemNames := make([]string, 0, len(expectedPropertyNames))
@@ -182,6 +196,20 @@ func TestCompletion(t *testing.T) {
 				},
 			},
 		}
+		// {
+		// 	"name": "Fido",
+		// 	"category": {
+		//	<- HERE
+		// 	},
+		//
+		// 	"tags": [
+		// 		{
+		//
+		//		"name": "test"
+		// 		}
+		// 	]
+		// }
+		//
 
 		parseOpenapi()
 		parseDocument(params.TextDocument.URI)
@@ -200,6 +228,49 @@ func TestCompletion(t *testing.T) {
 
 		expect.Equals(t, expectedPropertyNames, itemNames)
 	})
+	t.Run("request body completion inner list object", func(t *testing.T) {
+		conf.OpenapiDefPaths = []oaiPath{"./fixtures/petstore.yaml"}
+		params := &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{
+					URI: "./fixtures/test_request_body.hurl",
+				},
+				Position: protocol.Position{
+					Line:      9,
+					Character: 1,
+				},
+			},
+		}
+		// {
+		// 	"name": "Fido",
+		// 	"category": {
+		//
+		// 	},
+		//
+		// 	"tags": [
+		// 		{
+		//	<- HERE
+		//		"name": "test"
+		// 		}
+		// 	]
+		// }
+
+		parseOpenapi()
+		parseDocument(params.TextDocument.URI)
+
+		is, err := completion(&ctx, params)
+		expect.NoErr(t, err)
+
+		items := is.([]protocol.CompletionItem)
+		expectedPropertyNames := []string{"id"}
+		itemNames := make([]string, 0, len(expectedPropertyNames))
+		for _, item := range items {
+			itemNames = append(itemNames, strings.Trim(item.Label, "\""))
+		}
+
+		slices.Sort(itemNames)
+
+		expect.Equals(t, expectedPropertyNames, itemNames)
+	})
 
 }
-

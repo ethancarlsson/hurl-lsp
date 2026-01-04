@@ -5,4 +5,10 @@ POST {{url}}/pet
 
 	},
 
+	"tags": [
+		{
+
+			"name": "test"
+		}
+	]
 }

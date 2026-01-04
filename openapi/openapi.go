@@ -127,6 +127,7 @@ type Schema struct {
 	Type       string            `json:"type"`
 	Properties map[string]Schema `json:"properties"`
 	Ref        string            `json:"$ref"`
+	Items      *Schema           `json:"items"`
 }
 
 func (s Schema) ToString(indent int) string {
@@ -151,6 +152,15 @@ func (o Op) NotDocumented() bool {
 }
 
 func (o OAI) resolveSchemaRef(schema Schema) Schema {
+	if schema.Items != nil {
+		schemaItems := o.resolveSchemaRef(*schema.Items)
+		schema.Items = &schemaItems
+	}
+
+	if schema.Ref == "" {
+		return schema
+	}
+
 	splitRefPtr := strings.Split(schema.Ref, "/")
 
 	schemasI := slices.Index(splitRefPtr, "schemas")
@@ -184,10 +194,6 @@ func (o OAI) resolveSchemaRef(schema Schema) Schema {
 	maps.Copy(schema.Properties, refedSchema.Properties)
 
 	for k, prop := range schema.Properties {
-		if prop.Ref == "" {
-			continue
-		}
-
 		schema.Properties[k] = o.resolveSchemaRef(prop)
 	}
 

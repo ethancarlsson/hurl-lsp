@@ -1,6 +1,7 @@
 package openapi_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -49,12 +50,27 @@ func TestGetOp(t *testing.T) {
 						},
 						"photoUrls": {
 							Type: "array",
+							Items: &openapi.Schema{
+								Type: "string",
+							},
 						},
 						"status": {
 							Type: "string",
 						},
 						"tags": {
 							Type: "array",
+							Items: &openapi.Schema{
+								Type: "object",
+								Ref:  "#/components/schemas/Tag",
+								Properties: map[string]openapi.Schema{
+									"id": {
+										Type: "integer",
+									},
+									"name": {
+										Type: "string",
+									},
+								},
+							},
 						},
 					},
 				},
@@ -117,7 +133,10 @@ func TestGetOp(t *testing.T) {
 			expect.Equals(t, tt.expectPath, op.Path)
 			expect.Equals(t, tt.expectSummary, op.Detail.Summary)
 			expect.Equals(t, tt.expectDesc, op.Detail.Description)
-			expect.Equals(t, tt.expectRequestBody, op.Detail.RequestBody)
+			expectedReq, err := json.Marshal(tt.expectRequestBody)
+			expect.NoErr(t, err)
+			actualReq, err := json.Marshal(op.Detail.RequestBody)
+			expect.Equals(t, string(expectedReq), string(actualReq))
 		})
 	}
 }

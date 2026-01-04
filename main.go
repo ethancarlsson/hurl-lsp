@@ -214,21 +214,44 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 
 	schemaPath := rawjson.PathToObj(req.Body.Value, currLine, col)
 	for _, path := range schemaPath {
-		innerSchema, ok := props[path]
+		innerSchema, ok := props[path.Name()]
 		if !ok {
 			props = make(map[string]openapi.Schema, 0)
 			break
 		}
 		var innerPropMap map[string]json.RawMessage
-		innerJSON, ok := propsMap[path]
-		if ok {
-			if err := json.Unmarshal(innerJSON, &propsMap); err != nil {
+		if path.IsArr() {
+			var innerPropMapList []map[string]json.RawMessage
+
+			innerJSON, ok := propsMap[path.Name()]
+
+			if ok {
+				if err := json.Unmarshal(innerJSON, &innerPropMapList); err != nil {
+					break
+				}
+			}
+
+			if len(innerPropMapList) == 0 {
 				break
+			}
+
+			innerPropMap = innerPropMapList[0]
+		} else {
+			innerJSON, ok := propsMap[path.Name()]
+
+			if ok {
+				if err := json.Unmarshal(innerJSON, &innerPropMap); err != nil {
+					break
+				}
 			}
 		}
 
 		propsMap = innerPropMap
-		props = innerSchema.Properties
+		if path.IsArr() {
+			props = innerSchema.Items.Properties
+		} else {
+			props = innerSchema.Properties
+		}
 	}
 
 	isOnLastProp := rawjson.IsOnLastProp(req.Body.Value, currLine, col)

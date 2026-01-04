@@ -10,10 +10,26 @@ import (
 	"unicode"
 )
 
+type JPath struct {
+	string
+}
+
+func (j JPath) IsArr() bool {
+	return strings.HasSuffix(j.string, `""`)
+}
+
+func (j JPath) Name() string {
+	if j.IsArr() {
+		return j.string[:len(j.string)-2]
+	}
+
+	return j.string
+}
+
 // Takes in lines of JSON and returns a slice of JSON representing the path
 // through maps required to get to the line,col pos
-func PathToObj(lines []string, line, col int) []string {
-	path := make([]string, 0)
+func PathToObj(lines []string, line, col int) []JPath {
+	path := make([]JPath, 0)
 
 	// ignore col for now
 	col = 0
@@ -23,11 +39,15 @@ func PathToObj(lines []string, line, col int) []string {
 	endBraceCount := 0
 	for i := line; i >= 0; i-- {
 		lookingForObjName := false
+		isObjInArr := false
 		objPathName := make([]byte, 0)
 
 		for j := col; j > 0; j-- {
 			currChar := lines[i][j]
 
+			// only add 1 if not looking for the name. If we're looking
+			// for the name of the property we might run into a case
+			// like "propnamewith{curlybraces}"
 			if currChar == '}' && !lookingForObjName {
 				endBraceCount += 1
 				continue
@@ -39,12 +59,19 @@ func PathToObj(lines []string, line, col int) []string {
 				continue
 			}
 
+			if currChar == '[' {
+				isObjInArr = true
+				lookingForObjName = true
+				continue
+			}
+
 			if lookingForObjName && (unicode.IsSpace(rune(currChar)) || string(currChar) == ":" || string(currChar) == "\"") {
 				continue
 			}
 
 			if lookingForObjName && (unicode.IsLetter(rune(currChar)) || unicode.IsNumber(rune(currChar))) {
 				objPathName = append(objPathName, currChar)
+
 				continue
 			}
 
@@ -57,7 +84,10 @@ func PathToObj(lines []string, line, col int) []string {
 
 		if len(objPathName) > 0 {
 			slices.Reverse(objPathName)
-			path = append(path, string(objPathName))
+			if isObjInArr {
+				objPathName = append(objPathName, '"', '"')
+			}
+			path = append(path, JPath{string(objPathName)})
 			endBraceCount = 0
 		}
 	}
@@ -73,13 +103,11 @@ func PathToObj(lines []string, line, col int) []string {
 func IsOnLastProp(lines []string, line, col int) bool {
 	for i := line; i < len(lines); i++ {
 		for j := col; j < len(lines[i]); j++ {
-			if lines[i][j] == '}' {
-				return true
-			} else if !unicode.IsSpace(rune(lines[i][j])) {
+			if unicode.IsSpace(rune(lines[i][j])) {
 				continue
-			} else {
-				return false
 			}
+
+			return lines[i][j] == '}'
 		}
 
 		// move col to the front for the next line
