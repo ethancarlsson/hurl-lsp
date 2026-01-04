@@ -247,7 +247,7 @@ func (o OAI) GetOp(method, path string) Op {
 	if err := json.Unmarshal(rawPathContent, &pathContent); err != nil {
 		op.Detail = OpDetail{
 			Summary:     undocumentedOpSummary,
-			Description: "Documentation of is malformed json/yaml",
+			Description: "Documentation is malformed json/yaml",
 		}
 
 		return op
