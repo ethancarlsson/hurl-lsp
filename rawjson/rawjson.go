@@ -37,6 +37,8 @@ func PathToObj(lines []string, line, col int) []JPath {
 	// used to keep track of how many of '}' character has been seen since the
 	// last '{' character
 	endBraceCount := 0
+	endBracketCount := 0
+
 	for i := line; i >= 0; i-- {
 		lookingForObjName := false
 		isObjInArr := false
@@ -59,9 +61,15 @@ func PathToObj(lines []string, line, col int) []JPath {
 				continue
 			}
 
+			if currChar == ']' {
+				endBracketCount -= 1
+				continue
+			}
+
 			if currChar == '[' {
-				isObjInArr = true
-				lookingForObjName = true
+				isObjInArr = endBracketCount == 0
+				lookingForObjName = endBracketCount == 0
+				endBracketCount += 1
 				continue
 			}
 

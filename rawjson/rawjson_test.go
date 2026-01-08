@@ -143,6 +143,25 @@ func TestPathToObj(t *testing.T) {
 			currCol:      0,
 			expectedPath: []string{"tags", "inner"},
 		},
+		{
+			name: "under array",
+			jsonLines: `{
+	"name": "Fido",
+	"tags": [
+		{
+			"id": 123,
+			"inner": {
+
+			}
+		}
+
+	]
+
+}`,
+			currLine:     11,
+			currCol:      0,
+			expectedPath: []string{},
+		},
 	}
 
 	for _, tt := range tests {
