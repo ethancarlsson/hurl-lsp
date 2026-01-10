@@ -767,15 +767,22 @@ components:
       xml:
         name: order
     Category:
-      type: object
-      properties:
-        id:
-          type: integer
-          format: int64
-          example: 1
-        name:
-          type: string
-          example: Dogs
+      allOf:
+        - type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+              example: 1
+            name:
+              type: string
+              example: Dogs
+        - type: object
+          properties:
+            rank:
+              type: integer
+              format: int64
+              example: 999
       xml:
         name: category
     User:

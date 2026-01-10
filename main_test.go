@@ -218,7 +218,7 @@ func TestCompletion(t *testing.T) {
 		expect.NoErr(t, err)
 
 		items := is.([]protocol.CompletionItem)
-		expectedPropertyNames := []string{"id", "name"}
+		expectedPropertyNames := []string{"id", "name", "rank"}
 		itemNames := make([]string, 0, len(expectedPropertyNames))
 		for _, item := range items {
 			itemNames = append(itemNames, strings.Trim(item.Label, "\""))

@@ -193,9 +193,9 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 		return items
 	}
 
-	props := op.Detail.RequestBody.Content.Json.Schema.Properties
+	currentSchema := op.Detail.RequestBody.Content.Json.Schema
 
-	if len(props) == 0 {
+	if len(currentSchema.Properties) == 0 {
 		return items
 	}
 
@@ -204,26 +204,26 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 		return items
 	}
 
-	var propsMap map[string]json.RawMessage
+	var alreadyProvidedProps map[string]json.RawMessage
 	reqBody := rawjson.CleanTrailingCommas(strings.Join(req.Body.Value, "\n"))
 	reqBody = rawjson.CleanVariables(reqBody)
 
-	if err := json.Unmarshal([]byte(reqBody), &propsMap); err != nil {
+	if err := json.Unmarshal([]byte(reqBody), &alreadyProvidedProps); err != nil {
 		return items
 	}
 
 	schemaPath := rawjson.PathToObj(req.Body.Value, currLine, col)
 	for _, path := range schemaPath {
-		innerSchema, ok := props[path.Name()]
+		innerSchema, ok := currentSchema.Properties[path.Name()]
 		if !ok {
-			props = make(map[string]openapi.Schema, 0)
+			currentSchema = openapi.Schema{}
 			break
 		}
 		var innerPropMap map[string]json.RawMessage
 		if path.IsArr() {
 			var innerPropMapList []map[string]json.RawMessage
 
-			innerJSON, ok := propsMap[path.Name()]
+			innerJSON, ok := alreadyProvidedProps[path.Name()]
 
 			if ok {
 				if err := json.Unmarshal(innerJSON, &innerPropMapList); err != nil {
@@ -237,7 +237,7 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 
 			innerPropMap = innerPropMapList[0]
 		} else {
-			innerJSON, ok := propsMap[path.Name()]
+			innerJSON, ok := alreadyProvidedProps[path.Name()]
 
 			if ok {
 				if err := json.Unmarshal(innerJSON, &innerPropMap); err != nil {
@@ -246,18 +246,18 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 			}
 		}
 
-		propsMap = innerPropMap
+		alreadyProvidedProps = innerPropMap
 		if path.IsArr() {
-			props = innerSchema.Items.Properties
+			currentSchema = *innerSchema.Items
 		} else {
-			props = innerSchema.Properties
+			currentSchema = innerSchema
 		}
 	}
 
 	isOnLastProp := rawjson.IsOnLastProp(req.Body.Value, currLine, col)
 
-	for name, schema := range props {
-		if _, isAlreadyThere := propsMap[name]; isAlreadyThere {
+	for name, schema := range currentSchema.Combined(alreadyProvidedProps).Properties {
+		if _, isAlreadyThere := alreadyProvidedProps[name]; isAlreadyThere {
 			continue
 		}
 

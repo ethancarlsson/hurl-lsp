@@ -128,11 +128,89 @@ type Schema struct {
 	Properties map[string]Schema `json:"properties"`
 	Ref        string            `json:"$ref"`
 	Items      *Schema           `json:"items"`
+	OneOf      []Schema          `json:"oneOf"`
+	AllOf      []Schema          `json:"allOf"`
+	AnyOf      []Schema          `json:"anyOf"`
+}
+
+func (s Schema) Combined(existingProps map[string]json.RawMessage) Schema {
+	for _, schema := range s.AnyOf {
+		if schema.Type != "" {
+			s.Type = schema.Type
+		}
+
+		if len(schema.Properties) > 0 {
+			maps.Copy(s.Properties, schema.Properties)
+		}
+	}
+
+	for _, schema := range s.AllOf {
+		if schema.Type != "" {
+			s.Type = schema.Type
+		}
+
+		if len(schema.Properties) > 0 {
+			maps.Copy(s.Properties, schema.Properties)
+		}
+	}
+
+	if len(s.OneOf) == 0 {
+		return s
+	}
+
+	bestMatchPropCount := 0
+	matchingPropCounts := make([]int, len(s.OneOf))
+	for i, schema := range s.OneOf {
+		for name := range schema.Properties {
+			if _, ok := existingProps[name]; ok {
+				matchingPropCounts[i] += 1
+			}
+		}
+
+		if matchingPropCounts[i] > bestMatchPropCount {
+			bestMatchPropCount = matchingPropCounts[i]
+		}
+	}
+
+	oneOfsToMerge := make([]Schema, 0, len(s.OneOf))
+	for i, schema := range s.OneOf {
+		if matchingPropCounts[i] == bestMatchPropCount {
+			oneOfsToMerge = append(oneOfsToMerge, schema)
+		}
+	}
+
+	for _, schema := range oneOfsToMerge {
+		if schema.Type != "" {
+			s.Type = schema.Type
+		}
+
+		if len(schema.Properties) > 0 {
+			maps.Copy(s.Properties, schema.Properties)
+		}
+	}
+
+	return s
 }
 
 func (s Schema) ToString(indent int) string {
-	res := strings.Repeat(" ", indent) + s.Type
-	for k, p := range s.Properties {
+	res := s.Type
+
+	if len(s.OneOf) > 0 {
+		res += "oneOf"
+		for _, schema := range s.OneOf {
+			res += "\n" + strings.Repeat(" ", indent+2) + "| " + schema.ToString(indent+2)
+		}
+
+		return res
+	}
+
+	props := s.Combined(make(map[string]json.RawMessage)).Properties
+	if s.Type == "array" && s.Items != nil {
+		res += "<" + s.Items.Type + ">"
+		props = s.Items.Properties
+	}
+
+	for k, p := range props {
 		res += "\n" + strings.Repeat(" ", indent+2) + "- " + k + ": " + p.ToString(indent+2)
 	}
 
@@ -152,6 +230,7 @@ func (o Op) NotDocumented() bool {
 }
 
 func (o OAI) resolveSchemaRef(schema Schema) Schema {
+	schema = o.resolveSchemaCombiners(schema)
 	if schema.Items != nil {
 		schemaItems := o.resolveSchemaRef(*schema.Items)
 		schema.Items = &schemaItems
@@ -191,10 +270,37 @@ func (o OAI) resolveSchemaRef(schema Schema) Schema {
 		refedSchema.Properties = make(map[string]Schema)
 	}
 
+	refedSchema = o.resolveSchemaCombiners(refedSchema)
+	if len(refedSchema.AllOf) > 0 {
+		schema.AllOf = refedSchema.AllOf
+	}
+	if len(refedSchema.OneOf) > 0 {
+		schema.OneOf = refedSchema.OneOf
+	}
+	if len(refedSchema.AnyOf) > 0 {
+		schema.AnyOf = refedSchema.AnyOf
+	}
+
 	maps.Copy(schema.Properties, refedSchema.Properties)
 
 	for k, prop := range schema.Properties {
 		schema.Properties[k] = o.resolveSchemaRef(prop)
+	}
+
+	return schema
+}
+
+func (o OAI) resolveSchemaCombiners(schema Schema) Schema {
+	for i, s := range schema.AnyOf {
+		schema.AnyOf[i] = o.resolveSchemaRef(s)
+	}
+
+	for i, s := range schema.AllOf {
+		schema.AllOf[i] = o.resolveSchemaRef(s)
+	}
+
+	for i, s := range schema.OneOf {
+		schema.OneOf[i] = o.resolveSchemaRef(s)
 	}
 
 	return schema

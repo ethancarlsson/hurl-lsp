@@ -21,6 +21,52 @@ func TestParse(t *testing.T) {
 	})
 }
 
+func TestSchemaCombined(t *testing.T) {
+	t.Run("with allOf combines all values and no existing properties", func(t *testing.T) {
+		schema := openapi.Schema{
+			Ref:        "#/components/schemas/Category",
+			Properties: map[string]openapi.Schema{},
+			AllOf: []openapi.Schema{
+				{
+					Type: "object",
+					Properties: map[string]openapi.Schema{
+						"id": {
+							Type: "integer",
+						},
+						"name": {
+							Type: "string",
+						},
+					},
+				},
+				{
+					Type: "object",
+					Properties: map[string]openapi.Schema{
+						"rank": {
+							Type: "integer",
+						},
+					},
+				},
+			},
+		}
+
+		actual := schema.Combined(map[string]json.RawMessage{})
+
+		expect.Equals(t, actual.Type, "object")
+		expect.Equals(t, actual.Properties, map[string]openapi.Schema{
+
+			"id": {
+				Type: "integer",
+			},
+			"name": {
+				Type: "string",
+			},
+			"rank": {
+				Type: "integer",
+			},
+		})
+	})
+}
+
 func TestGetOp(t *testing.T) {
 	petReqBody := openapi.RequestBody{
 		Description: "Create a new pet in the store",
@@ -31,14 +77,27 @@ func TestGetOp(t *testing.T) {
 					Ref:  "#/components/schemas/Pet",
 					Properties: map[string]openapi.Schema{
 						"category": {
-							Ref:  "#/components/schemas/Category",
-							Type: "object",
-							Properties: map[string]openapi.Schema{
-								"id": {
-									Type: "integer",
+							Ref:        "#/components/schemas/Category",
+							Properties: map[string]openapi.Schema{},
+							AllOf: []openapi.Schema{
+								{
+									Type: "object",
+									Properties: map[string]openapi.Schema{
+										"id": {
+											Type: "integer",
+										},
+										"name": {
+											Type: "string",
+										},
+									},
 								},
-								"name": {
-									Type: "string",
+								{
+									Type: "object",
+									Properties: map[string]openapi.Schema{
+										"rank": {
+											Type: "integer",
+										},
+									},
 								},
 							},
 						},
