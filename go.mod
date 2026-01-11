@@ -3,6 +3,7 @@ module github.com/ethancarlsson/hurl-lsp
 go 1.25.3
 
 require (
+	github.com/agnivade/levenshtein v1.2.1
 	github.com/tliron/commonlog v0.2.21
 	github.com/tliron/glsp v0.2.2
 )

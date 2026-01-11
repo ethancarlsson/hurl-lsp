@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ethancarlsson/hurl-lsp/completions"
+	"github.com/ethancarlsson/hurl-lsp/diagnose"
 	"github.com/ethancarlsson/hurl-lsp/hurlfile"
 	"github.com/ethancarlsson/hurl-lsp/openapi"
 	"github.com/ethancarlsson/hurl-lsp/rawjson"
@@ -73,6 +74,8 @@ func documentDidOpen(context *glsp.Context, params *protocol.DidOpenTextDocument
 		return err
 	}
 
+	runDiagnostics(context, params.TextDocument.URI)
+
 	return nil
 }
 
@@ -81,7 +84,44 @@ func documentDidChange(context *glsp.Context, params *protocol.DidChangeTextDocu
 		return err
 	}
 
+	runDiagnostics(context, params.TextDocument.URI)
+
 	return nil
+}
+
+func runDiagnostics(context *glsp.Context, documentURI string) {
+	diagnostics := make([]protocol.Diagnostic, 0)
+	source := lsName
+
+	for _, entry := range hf.Entries {
+		if diagnosis := diagnose.HTTPMethod(entry.Request.Method.Name); diagnosis.HasProblem {
+			severityErr := protocol.DiagnosticSeverityError
+			diagnostics = append(diagnostics, protocol.Diagnostic{
+				Range:    toProtocolRange(entry.Request.Method.Range),
+				Message:  diagnosis.Message,
+				Source:   &source,
+				Severity: &severityErr,
+			})
+		}
+	}
+
+	context.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
+		URI:         documentURI,
+		Diagnostics: diagnostics,
+	})
+}
+
+func toProtocolRange(srcRange hurlfile.SourceRange) protocol.Range {
+	return protocol.Range{
+		Start: protocol.Position{
+			Line:      protocol.UInteger(srcRange.StartLine),
+			Character: protocol.UInteger(srcRange.StartCol),
+		},
+		End: protocol.Position{
+			Line:      protocol.UInteger(srcRange.EndLine),
+			Character: protocol.UInteger(srcRange.EndCol),
+		},
+	}
 }
 
 func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {
