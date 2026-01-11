@@ -194,11 +194,12 @@ func (s Schema) Combined(existingProps map[string]json.RawMessage) Schema {
 
 func (s Schema) ToString(indent int) string {
 	res := s.Type
+	const indentIncrement = 2
 
 	if len(s.OneOf) > 0 {
 		res += "oneOf"
 		for _, schema := range s.OneOf {
-			res += "\n" + strings.Repeat(" ", indent+2) + "| " + schema.ToString(indent+2)
+			res += "\n" + strings.Repeat(" ", indent+indentIncrement) + "| " + schema.ToString(indent+indentIncrement)
 		}
 
 		return res
@@ -211,7 +212,7 @@ func (s Schema) ToString(indent int) string {
 	}
 
 	for k, p := range props {
-		res += "\n" + strings.Repeat(" ", indent+2) + "- " + k + ": " + p.ToString(indent+2)
+		res += "\n" + strings.Repeat(" ", indent+indentIncrement) + "- " + k + ": " + p.ToString(indent+indentIncrement)
 	}
 
 	return res
