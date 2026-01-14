@@ -62,6 +62,7 @@ func main() {
 		TextDocumentSignatureHelp: signatureHelp,
 		TextDocumentDidOpen:       documentDidOpen,
 		TextDocumentDidChange:     documentDidChange,
+		TextDocumentDidSave:       documentDidSave,
 	}
 
 	server := server.NewServer(&handler, lsName, false)
@@ -83,7 +84,15 @@ func documentDidChange(context *glsp.Context, params *protocol.DidChangeTextDocu
 	if err := parseDocument(params.TextDocument.URI); err != nil {
 		return err
 	}
+	runDiagnostics(context, params.TextDocument.URI)
 
+	return nil
+}
+
+func documentDidSave(context *glsp.Context, params *protocol.DidSaveTextDocumentParams) error {
+	if err := parseDocument(params.TextDocument.URI); err != nil {
+		return err
+	}
 	runDiagnostics(context, params.TextDocument.URI)
 
 	return nil
@@ -92,15 +101,41 @@ func documentDidChange(context *glsp.Context, params *protocol.DidChangeTextDocu
 func runDiagnostics(context *glsp.Context, documentURI string) {
 	diagnostics := make([]protocol.Diagnostic, 0)
 	source := lsName
+	pathList := oai.PathList()
+	infoErr := protocol.DiagnosticSeverityInformation
 
 	for _, entry := range hf.Entries {
-		if diagnosis := diagnose.HTTPMethod(entry.Request.Method.Name); diagnosis.HasProblem {
+		if d := diagnose.HTTPMethod(entry.Request.Method.Name); d.HasProblem {
 			severityErr := protocol.DiagnosticSeverityError
 			diagnostics = append(diagnostics, protocol.Diagnostic{
 				Range:    toProtocolRange(entry.Request.Method.Range),
-				Message:  diagnosis.Message,
+				Message:  d.Message,
 				Source:   &source,
 				Severity: &severityErr,
+			})
+		}
+
+		op := oai.GetOp(entry.Request.Method.Name, entry.Request.Target.Target)
+		usedURI, assumedPath, opMethods := oai.GetPathMethods(entry.Request.Target.Target)
+		pathMatches := usedURI == assumedPath
+		if op.NotDocumented() && len(opMethods) > 0 && pathMatches {
+			diagnostics = append(diagnostics, protocol.Diagnostic{
+				Range: toProtocolRange(entry.Request.Method.Range),
+				Message: fmt.Sprintf(
+					"Only the following methods are documented for this URI %s.",
+					strings.ToUpper(strings.Join(opMethods, ", ")),
+				),
+				Source:   &source,
+				Severity: &infoErr,
+			})
+		}
+
+		if d := diagnose.Path(usedURI, pathList); (!pathMatches || usedURI == "") && d.HasProblem {
+			diagnostics = append(diagnostics, protocol.Diagnostic{
+				Range:    toProtocolRange(entry.Request.Target.Range),
+				Message:  d.Message,
+				Source:   &source,
+				Severity: &infoErr,
 			})
 		}
 	}

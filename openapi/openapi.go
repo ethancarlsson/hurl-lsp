@@ -382,6 +382,73 @@ func (o OAI) GetOp(method, path string) Op {
 	return op
 }
 
+// Accepts a path and returns the availableMethods for the path most closely
+// matching the path provided. usedURI is also returned which represents the path
+// provided with query params and location data removed as well as anything that
+// prefixes assumedPath from the documentation (URL or versioning data for example,
+// https://example.com, http://versioned/v1 would be removed for example).
+func (o OAI) GetPathMethods(path string) (usedURI string, assumedPath string, availableMethods []string) {
+	longestMatching := 0
+	var rawPathContent json.RawMessage
+	var regUsed *regexp.Regexp
+
+	for pInSpec, content := range o.Paths {
+		if len(pInSpec) < longestMatching {
+			continue
+		}
+
+		reg, ok := o.pathRegexps[pInSpec]
+		if !ok || reg == nil {
+			continue
+		}
+
+		match := reg.MatchString(path)
+		if match {
+			rawPathContent = content
+			longestMatching = len(pInSpec)
+			regUsed = reg
+			assumedPath = pInSpec
+		}
+	}
+
+	if regUsed == nil {
+		return "", "", []string{}
+	}
+
+	const httpMethodsCount = 9
+	methods := make(map[string]struct{}, httpMethodsCount)
+
+	if err := json.Unmarshal(rawPathContent, &methods); err != nil {
+		return "", "", []string{}
+	}
+
+	res := make([]string, 0, len(methods))
+	for method := range methods {
+		res = append(res, method)
+	}
+
+	pathLoc := regUsed.FindIndex([]byte(path))
+	if len(pathLoc) < 1 {
+		return "", "", res
+	}
+
+	usedURI = path[pathLoc[0]:]
+	qpStart := strings.Index(usedURI, "?")
+	if qpStart == -1 {
+		return usedURI, assumedPath, res
+	}
+
+	usedURI = usedURI[:qpStart]
+	locStart := strings.Index(usedURI, "#")
+	if locStart == -1 {
+		return usedURI, assumedPath, res
+	}
+
+	usedURI = usedURI[:locStart]
+
+	return usedURI, assumedPath, res
+}
+
 func mapKeys[T any](m map[string]T) []string {
 	keys := make([]string, 0, len(m))
 	for key := range m {
