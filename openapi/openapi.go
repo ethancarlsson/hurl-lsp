@@ -117,10 +117,23 @@ func (ops OpParams) In(in string) OpParams {
 	return params
 }
 
+func (ops OpParams) Required() []string {
+	reqOps := make([]string, 0, len(ops))
+
+	for _, op := range ops {
+		if op.Required {
+			reqOps = append(reqOps, op.Name)
+		}
+	}
+
+	return reqOps
+}
+
 type OpParam struct {
-	Name   string `json:"name"`
-	In     string `json:"in"`
-	Schema Schema `json:"schema"`
+	Name     string `json:"name"`
+	In       string `json:"in"`
+	Schema   Schema `json:"schema"`
+	Required bool   `json:"required"`
 }
 
 type Schema struct {
@@ -387,7 +400,7 @@ func (o OAI) GetOp(method, path string) Op {
 // provided with query params and location data removed as well as anything that
 // prefixes assumedPath from the documentation (URL or versioning data for example,
 // https://example.com, http://versioned/v1 would be removed for example).
-func (o OAI) GetPathMethods(path string) (usedURI string, assumedPath string, availableMethods []string) {
+func (o OAI) GetPathMethods(path string) []string {
 	longestMatching := 0
 	var rawPathContent json.RawMessage
 	var regUsed *regexp.Regexp
@@ -407,19 +420,18 @@ func (o OAI) GetPathMethods(path string) (usedURI string, assumedPath string, av
 			rawPathContent = content
 			longestMatching = len(pInSpec)
 			regUsed = reg
-			assumedPath = pInSpec
 		}
 	}
 
 	if regUsed == nil {
-		return "", "", []string{}
+		return []string{}
 	}
 
 	const httpMethodsCount = 9
 	methods := make(map[string]struct{}, httpMethodsCount)
 
 	if err := json.Unmarshal(rawPathContent, &methods); err != nil {
-		return "", "", []string{}
+		return []string{}
 	}
 
 	res := make([]string, 0, len(methods))
@@ -429,24 +441,10 @@ func (o OAI) GetPathMethods(path string) (usedURI string, assumedPath string, av
 
 	pathLoc := regUsed.FindIndex([]byte(path))
 	if len(pathLoc) < 1 {
-		return "", "", res
+		return res
 	}
 
-	usedURI = path[pathLoc[0]:]
-	qpStart := strings.Index(usedURI, "?")
-	if qpStart == -1 {
-		return usedURI, assumedPath, res
-	}
-
-	usedURI = usedURI[:qpStart]
-	locStart := strings.Index(usedURI, "#")
-	if locStart == -1 {
-		return usedURI, assumedPath, res
-	}
-
-	usedURI = usedURI[:locStart]
-
-	return usedURI, assumedPath, res
+	return res
 }
 
 func mapKeys[T any](m map[string]T) []string {

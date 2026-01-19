@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/agnivade/levenshtein"
 )
 
 var (
-	paramRe = regexp.MustCompile(`\{\.*\}`)
+	variableRe = regexp.MustCompile(`\{.*\}`)
 )
 
 type Diagnosis struct {
@@ -54,24 +55,38 @@ func closestMethodName(method string) (closest string, shortestDist int) {
 	return closest, shortestDist
 }
 
-func Path(path string, availablePaths []string) Diagnosis {
-	path = string(paramRe.ReplaceAll([]byte(path), []byte{}))
-
-	shortestDist := 99999999
-	closest := ""
-
-	for _, availableP := range availablePaths {
-		availableP = string(paramRe.ReplaceAll([]byte(availableP), []byte{}))
-		if computedDist := levenshtein.ComputeDistance(availableP, path); computedDist < shortestDist {
-			shortestDist = computedDist
-			closest = availableP
+func QueryParams(path string, requiredParams []string) Diagnosis {
+	split := strings.Split(path, "?")
+	if len(split) < 2 {
+		return Diagnosis{
+			HasProblem: len(requiredParams) > 0,
+			Message:    fmt.Sprintf("Missing required params: %v", requiredParams),
 		}
 	}
 
-	diagnosis := Diagnosis{
-		Message:    "Undocumented uri." + fmt.Sprintf(" Did you mean %s?", closest),
-		HasProblem: true,
+	params := strings.Split(split[1], "&")
+	providedParams := make([]string, 0, len(params))
+	for _, param := range params {
+		kv := strings.Split(param, "=")
+		providedParams = append(providedParams, kv[0])
 	}
 
-	return diagnosis
+	missingParams := make([]string, 0, len(requiredParams))
+
+	for _, requiredParam := range requiredParams {
+		if !slices.Contains(providedParams, requiredParam) {
+			missingParams = append(missingParams, requiredParam)
+		}
+	}
+
+	if len(missingParams) == 0 {
+		return Diagnosis{
+			HasProblem: false,
+		}
+	}
+
+	return Diagnosis{
+		HasProblem: true,
+		Message:    fmt.Sprintf("Missing required params: %v", missingParams),
+	}
 }

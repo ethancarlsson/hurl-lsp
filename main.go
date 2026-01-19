@@ -101,8 +101,8 @@ func documentDidSave(context *glsp.Context, params *protocol.DidSaveTextDocument
 func runDiagnostics(context *glsp.Context, documentURI string) {
 	diagnostics := make([]protocol.Diagnostic, 0)
 	source := lsName
-	pathList := oai.PathList()
 	infoErr := protocol.DiagnosticSeverityInformation
+	errorErr := protocol.DiagnosticSeverityError
 
 	for _, entry := range hf.Entries {
 		if d := diagnose.HTTPMethod(entry.Request.Method.Name); d.HasProblem {
@@ -116,9 +116,9 @@ func runDiagnostics(context *glsp.Context, documentURI string) {
 		}
 
 		op := oai.GetOp(entry.Request.Method.Name, entry.Request.Target.Target)
-		usedURI, assumedPath, opMethods := oai.GetPathMethods(entry.Request.Target.Target)
-		pathMatches := usedURI == assumedPath
-		if op.NotDocumented() && len(opMethods) > 0 && pathMatches {
+
+		opMethods := oai.GetPathMethods(entry.Request.Target.Target)
+		if op.NotDocumented() && len(opMethods) > 0 {
 			diagnostics = append(diagnostics, protocol.Diagnostic{
 				Range: toProtocolRange(entry.Request.Method.Range),
 				Message: fmt.Sprintf(
@@ -130,12 +130,12 @@ func runDiagnostics(context *glsp.Context, documentURI string) {
 			})
 		}
 
-		if d := diagnose.Path(usedURI, pathList); (!pathMatches || usedURI == "") && d.HasProblem {
+		if d := diagnose.QueryParams(entry.Request.Target.Target, op.Detail.Parameters.Required()); d.HasProblem {
 			diagnostics = append(diagnostics, protocol.Diagnostic{
 				Range:    toProtocolRange(entry.Request.Target.Range),
 				Message:  d.Message,
 				Source:   &source,
-				Severity: &infoErr,
+				Severity: &errorErr,
 			})
 		}
 	}
