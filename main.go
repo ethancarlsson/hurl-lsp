@@ -90,6 +90,7 @@ func documentDidChange(context *glsp.Context, params *protocol.DidChangeTextDocu
 }
 
 func documentDidSave(context *glsp.Context, params *protocol.DidSaveTextDocumentParams) error {
+	parseOpenapi() // reparse on save so users can update their schemas
 	if err := parseDocument(params.TextDocument.URI); err != nil {
 		return err
 	}
@@ -106,12 +107,11 @@ func runDiagnostics(context *glsp.Context, documentURI string) {
 
 	for _, entry := range hf.Entries {
 		if d := diagnose.HTTPMethod(entry.Request.Method.Name); d.HasProblem {
-			severityErr := protocol.DiagnosticSeverityError
 			diagnostics = append(diagnostics, protocol.Diagnostic{
 				Range:    toProtocolRange(entry.Request.Method.Range),
 				Message:  d.Message,
 				Source:   &source,
-				Severity: &severityErr,
+				Severity: &errorErr,
 			})
 		}
 
