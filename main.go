@@ -138,12 +138,97 @@ func runDiagnostics(context *glsp.Context, documentURI string) {
 				Severity: &errorErr,
 			})
 		}
+
+		diagnostics = addReqBodyDiagnostics(diagnostics, entry.Request, op)
 	}
 
 	context.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
 		URI:         documentURI,
 		Diagnostics: diagnostics,
 	})
+}
+
+func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Request, op openapi.Op) []protocol.Diagnostic {
+	schema := op.Detail.RequestBody.Content.Json.Schema
+	source := lsName
+	errorErr := protocol.DiagnosticSeverityError
+
+	if len(schema.Properties) == 0 {
+		return diagnostics
+	}
+
+	var alreadyProvidedProps map[string]json.RawMessage
+	reqBody := rawjson.CleanTrailingCommas(strings.Join(req.Body.Value, "\n"))
+	reqBody = rawjson.CleanVariables(reqBody)
+
+	if err := json.Unmarshal([]byte(reqBody), &alreadyProvidedProps); err != nil {
+		return diagnostics
+	}
+
+	missingProps := make([][]string, 0, len(schema.Required))
+
+	missingProps = append(missingProps, collectMissingProps(
+		missingProps, []string{},
+		alreadyProvidedProps, schema,
+	)...)
+
+	for _, propPath := range missingProps {
+		if len(propPath) == 0 {
+			continue
+		}
+		// path without the last element
+		objPath := propPath[:len(propPath)-1]
+
+		pathRange := rawjson.PathToRange(req.Body.Value, objPath)
+
+		diagnostics = append(diagnostics, protocol.Diagnostic{
+			Range: protocol.Range{
+				Start: protocol.Position{
+					Line:      protocol.UInteger(req.Body.Range.StartLine + pathRange.Start.Line),
+					Character: protocol.UInteger(pathRange.Start.Col),
+				},
+				End: protocol.Position{
+					Line:      protocol.UInteger(req.Body.Range.StartLine + pathRange.End.Line),
+					Character: protocol.UInteger(pathRange.End.Col),
+				},
+			},
+			Message:  fmt.Sprintf("Missing required param %s", strings.Join(propPath, "/")),
+			Source:   &source,
+			Severity: &errorErr,
+		})
+
+	}
+
+	return diagnostics
+}
+
+func collectMissingProps(missingProps [][]string, path []string, provided map[string]json.RawMessage, schema openapi.Schema) [][]string {
+	for _, required := range schema.Required {
+		if _, ok := provided[required]; !ok {
+			missingProps = append(missingProps, append(path, required))
+		}
+	}
+
+	for name, prop := range schema.Properties {
+		if prop.Properties == nil {
+			continue
+		}
+
+		provided, ok := provided[name]
+		if !ok {
+			continue
+		}
+
+		var obj map[string]json.RawMessage
+		if err := json.Unmarshal(provided, &obj); err != nil {
+			continue
+		}
+
+		newPath := append(path, name)
+		missingProps = collectMissingProps(missingProps, newPath, obj, prop)
+	}
+
+	return missingProps
 }
 
 func toProtocolRange(srcRange hurlfile.SourceRange) protocol.Range {

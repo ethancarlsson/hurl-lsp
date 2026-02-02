@@ -139,6 +139,7 @@ type OpParam struct {
 type Schema struct {
 	Type       string            `json:"type"`
 	Properties map[string]Schema `json:"properties"`
+	Required   []string          `json:"required"`
 	Ref        string            `json:"$ref"`
 	Items      *Schema           `json:"items"`
 	OneOf      []Schema          `json:"oneOf"`
@@ -296,6 +297,7 @@ func (o OAI) resolveSchemaRef(schema Schema) Schema {
 	}
 
 	maps.Copy(schema.Properties, refedSchema.Properties)
+	schema.Required = refedSchema.Required
 
 	for k, prop := range schema.Properties {
 		schema.Properties[k] = o.resolveSchemaRef(prop)

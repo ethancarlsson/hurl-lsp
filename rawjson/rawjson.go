@@ -104,6 +104,137 @@ func PathToObj(lines []string, line, col int) []JPath {
 	return path
 }
 
+type Range struct {
+	Start Pos
+	End   Pos
+}
+
+type Pos struct {
+	Line int
+	Col  int
+}
+
+func PathToRange(lines []string, path []string) Range {
+	lenLines := len(lines)
+	lastCol := 0
+	if lenLines > 0 {
+		lastCol = len(lines[lenLines-1]) - 1
+	}
+
+	if len(path) == 0 {
+		return Range{
+			Start: Pos{
+				Line: 0,
+				Col:  0,
+			},
+			End: Pos{
+				Line: lenLines - 1,
+				Col:  lastCol,
+			},
+		}
+	}
+
+	// Wrapped in function to take advantage of early return
+	pathStart := func() Pos {
+		pathStart := Pos{}
+		pI := 0
+
+		for i, line := range lines {
+			pPointer := 0
+			for j, char := range line {
+				if pPointer >= len(path[pI]) {
+					pathStart.Line = i
+					pathStart.Col = j - len(path[pI]) - 1
+					return pathStart
+				}
+
+				if rune(path[pI][pPointer]) == char {
+					pPointer += 1
+					continue
+				}
+
+				if rune(path[pI][pPointer]) != char {
+					pPointer = 0
+					continue
+				}
+			}
+		}
+
+		return pathStart
+	}()
+
+	pathEnd := func() Pos {
+		pathEnd := Pos{}
+		started := false
+		openCount := 0
+
+		for i, line := range lines {
+			if i < pathStart.Line {
+				continue
+			}
+
+			for j, char := range line {
+				if !started && j < pathStart.Col {
+					continue
+				}
+
+				started = true
+
+				if char == '{' {
+					openCount += 1
+				}
+
+				if char == '}' {
+					openCount -= 1
+				}
+
+				if char == '}' && openCount == 0 {
+					pathEnd.Line = i
+					pathEnd.Col = j
+					return pathEnd
+				}
+			}
+		}
+
+		return pathEnd
+	}()
+
+	if len(path) == 1 {
+		return Range{pathStart, pathEnd}
+	}
+
+	lines[pathEnd.Line] = lines[pathEnd.Line][:pathEnd.Col+1]
+	lines[pathStart.Line] = lines[pathStart.Line][pathStart.Col:]
+	lines = lines[pathStart.Line : pathEnd.Line+1]
+
+	innerPathRange := PathToRange(lines, path[1:])
+	startCol := innerPathRange.Start.Col
+	endCol := innerPathRange.End.Col
+
+	// If it starts at 0 that means that the innerPath is on the same
+	// line as the outerPath. This means that the start column needs to be
+	// considered as part of the inner position.
+	if innerPathRange.Start.Line == 0 {
+		startCol = startCol + pathStart.Col
+	}
+
+	if innerPathRange.End.Line == 0 {
+		endCol = endCol + pathStart.Col
+	}
+
+	return Range{
+		Start: Pos{
+			Line: pathStart.Line + innerPathRange.Start.Line,
+			Col:  startCol,
+		},
+		End: Pos{
+			Line: pathStart.Line + innerPathRange.End.Line,
+			Col:  endCol,
+		},
+	}
+	// return Range{pathStart, pathEnd}
+}
+
 // Accepts lines, line, and col and returns true if adding a property at that
 // position will make it the last property in the JSON object.
 // It returns true if there are no characters between this position and the first

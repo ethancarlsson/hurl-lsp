@@ -73,8 +73,9 @@ func TestGetOp(t *testing.T) {
 		Content: openapi.RequestBodyContent{
 			Json: openapi.BodySchema{
 				Schema: openapi.Schema{
-					Type: "object",
-					Ref:  "#/components/schemas/Pet",
+					Type:     "object",
+					Ref:      "#/components/schemas/Pet",
+					Required: []string{"name", "photoUrls"},
 					Properties: map[string]openapi.Schema{
 						"category": {
 							Ref:        "#/components/schemas/Category",

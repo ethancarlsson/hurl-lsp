@@ -239,3 +239,104 @@ func TestIsOnLastProp(t *testing.T) {
 		})
 	}
 }
+
+func TestPathToRange(t *testing.T) {
+	tests := []struct {
+		name      string
+		jsonLines string
+		path      []string
+		expected  rawjson.Range
+	}{
+		{
+			name: "empty path",
+			jsonLines: `{
+				"test": {
+					"id": 123
+				}
+			}`,
+			path: []string{},
+			expected: rawjson.Range{
+				Start: rawjson.Pos{0, 0},
+				End:   rawjson.Pos{4, 3},
+			},
+		},
+		{
+			name: "first obj",
+			jsonLines: `{
+				"test": {
+					"id": 123,
+					"inner": { "test": 123 }
+				}
+			}`,
+			path: []string{"test"},
+			expected: rawjson.Range{
+				Start: rawjson.Pos{1, 4},
+				End:   rawjson.Pos{4, 4},
+			},
+		},
+		{
+			name: "inner obj",
+			jsonLines: `{
+				"test": {
+					"id": 123,
+					"inner": { "test": 123 }
+				}
+			}`,
+			path: []string{"test", "inner"},
+			expected: rawjson.Range{
+				Start: rawjson.Pos{3, 5},
+				End:   rawjson.Pos{3, 28},
+			},
+		},
+		{
+			name: "inner obj one line",
+			jsonLines: `{
+				"test": { "inner": { "test": 123 } }
+			}`,
+			path: []string{"test", "inner"},
+			expected: rawjson.Range{
+				Start: rawjson.Pos{1, 14},
+				End:   rawjson.Pos{1, 37},
+			},
+		},
+		{
+			name: "same start same end line",
+			jsonLines: `{
+				"test": { "inner": { 
+					"test": 123 } }
+			}`,
+			path: []string{"test", "inner", "inner2"},
+			expected: rawjson.Range{
+				Start: rawjson.Pos{1, 14},
+				End:   rawjson.Pos{2, 17},
+			},
+		},
+		{
+			name: "depth 3",
+			jsonLines: `{
+				"test": {
+					"id": 123,
+					"inner": { 
+						"inner2": {
+							"test": 123
+						}
+					}
+				}
+			}`,
+			path: []string{"test", "inner", "inner2"},
+			expected: rawjson.Range{
+				Start: rawjson.Pos{4, 6},
+				End:   rawjson.Pos{6, 6},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			expect.Equals(t, tt.expected, rawjson.PathToRange(
+				strings.Split(tt.jsonLines, "\n"),
+				tt.path,
+			))
+		})
+	}
+}
