@@ -325,3 +325,99 @@ func TestCompletion(t *testing.T) {
 		expect.Equals(t, expectedPropertyNames, itemNames)
 	})
 }
+
+func TestDiagnostics(t *testing.T) {
+	t.Cleanup(func() {
+		conf.OpenapiDefPaths = []oaiPath{}
+	})
+
+	tests := []struct {
+		filePath string
+		expected []protocol.Diagnostic
+	}{
+		{
+			filePath: "./fixtures/test_captures.hurl",
+			expected: []protocol.Diagnostic{
+				{
+					Range: protocol.Range{
+						Start: protocol.Position{
+							Line:      11,
+							Character: 0,
+						},
+						End: protocol.Position{
+							Line:      13,
+							Character: 0,
+						},
+					},
+					Message: `Missing required property "name"`,
+				},
+				{
+					Range: protocol.Range{
+						Start: protocol.Position{
+							Line:      11,
+							Character: 0,
+						},
+						End: protocol.Position{
+							Line:      13,
+							Character: 0,
+						},
+					},
+					Message: `Missing required property "photoUrls"`,
+				},
+			},
+		},
+		{
+			filePath: "./fixtures/test_request_body.hurl",
+			expected: []protocol.Diagnostic{
+				{
+					Range: protocol.Range{
+						Start: protocol.Position{
+							Line:      1,
+							Character: 0,
+						},
+						End: protocol.Position{
+							Line:      18,
+							Character: 0,
+						},
+					},
+					Message: `Missing required property "photoUrls"`,
+				},
+				{
+					Range: protocol.Range{
+						Start: protocol.Position{
+							Line:      14,
+							Character: 2,
+						},
+						End: protocol.Position{
+							Line:      16,
+							Character: 2,
+						},
+					},
+					Message: `Missing required property "siblings/id123/href"`,
+				},
+			},
+		},
+	}
+
+	ignorePointers := func(p []protocol.Diagnostic) []protocol.Diagnostic {
+		ret := make([]protocol.Diagnostic, 0, len(p))
+		for _, d := range p {
+			d.Source = nil
+			d.Severity = nil
+
+			ret = append(ret, d)
+		}
+
+		return ret
+	}
+
+	for _, tc := range tests {
+		t.Run("diagnostics for "+tc.filePath, func(t *testing.T) {
+			conf.OpenapiDefPaths = []oaiPath{"./fixtures/petstore.yaml"}
+			parseOpenapi()
+			parseDocument(tc.filePath)
+
+			expect.Equals(t, tc.expected, ignorePointers(runDiagnostics()))
+		})
+	}
+}

@@ -117,11 +117,11 @@ func (ops OpParams) In(in string) OpParams {
 	return params
 }
 
-func (ops OpParams) Required() []string {
+func (ops OpParams) Required(in string) []string {
 	reqOps := make([]string, 0, len(ops))
 
 	for _, op := range ops {
-		if op.Required {
+		if op.Required && op.In == in {
 			reqOps = append(reqOps, op.Name)
 		}
 	}

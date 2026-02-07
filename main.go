@@ -75,7 +75,12 @@ func documentDidOpen(context *glsp.Context, params *protocol.DidOpenTextDocument
 		return err
 	}
 
-	runDiagnostics(context, params.TextDocument.URI)
+	diagnostics := runDiagnostics()
+
+	context.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
+		URI:         params.TextDocument.URI,
+		Diagnostics: diagnostics,
+	})
 
 	return nil
 }
@@ -84,7 +89,12 @@ func documentDidChange(context *glsp.Context, params *protocol.DidChangeTextDocu
 	if err := parseDocument(params.TextDocument.URI); err != nil {
 		return err
 	}
-	runDiagnostics(context, params.TextDocument.URI)
+	diagnostics := runDiagnostics()
+
+	context.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
+		URI:         params.TextDocument.URI,
+		Diagnostics: diagnostics,
+	})
 
 	return nil
 }
@@ -94,12 +104,18 @@ func documentDidSave(context *glsp.Context, params *protocol.DidSaveTextDocument
 	if err := parseDocument(params.TextDocument.URI); err != nil {
 		return err
 	}
-	runDiagnostics(context, params.TextDocument.URI)
+
+	diagnostics := runDiagnostics()
+
+	context.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
+		URI:         params.TextDocument.URI,
+		Diagnostics: diagnostics,
+	})
 
 	return nil
 }
 
-func runDiagnostics(context *glsp.Context, documentURI string) {
+func runDiagnostics() []protocol.Diagnostic {
 	diagnostics := make([]protocol.Diagnostic, 0)
 	source := lsName
 	infoErr := protocol.DiagnosticSeverityInformation
@@ -130,7 +146,7 @@ func runDiagnostics(context *glsp.Context, documentURI string) {
 			})
 		}
 
-		if d := diagnose.QueryParams(entry.Request.Target.Target, op.Detail.Parameters.Required()); d.HasProblem {
+		if d := diagnose.QueryParams(entry.Request.Target.Target, op.Detail.Parameters.Required("query")); d.HasProblem {
 			diagnostics = append(diagnostics, protocol.Diagnostic{
 				Range:    toProtocolRange(entry.Request.Target.Range),
 				Message:  d.Message,
@@ -142,10 +158,7 @@ func runDiagnostics(context *glsp.Context, documentURI string) {
 		diagnostics = addReqBodyDiagnostics(diagnostics, entry.Request, op)
 	}
 
-	context.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
-		URI:         documentURI,
-		Diagnostics: diagnostics,
-	})
+	return diagnostics
 }
 
 func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Request, op openapi.Op) []protocol.Diagnostic {
@@ -192,7 +205,7 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 					Character: protocol.UInteger(pathRange.End.Col),
 				},
 			},
-			Message:  fmt.Sprintf("Missing required param %s", strings.Join(propPath, "/")),
+			Message:  fmt.Sprintf(`Missing required property "%s"`, strings.Join(propPath, "/")),
 			Source:   &source,
 			Severity: &errorErr,
 		})
@@ -214,6 +227,7 @@ func collectMissingProps(missingProps [][]string, path []string, provided map[st
 			continue
 		}
 
+		propSchema := prop
 		provided, ok := provided[name]
 		if !ok {
 			continue
@@ -225,9 +239,29 @@ func collectMissingProps(missingProps [][]string, path []string, provided map[st
 		}
 
 		newPath := append(path, name)
-		missingProps = collectMissingProps(missingProps, newPath, obj, prop)
+		missingProps = collectMissingProps(missingProps, newPath, obj, propSchema)
 	}
 
+	for name, prop := range schema.Properties {
+		if prop.AdditionalProperties == nil {
+			continue
+		}
+
+		provided, ok := provided[name]
+		if !ok {
+			continue
+		}
+
+		var additionalProps map[string]map[string]json.RawMessage
+		if err := json.Unmarshal(provided, &additionalProps); err != nil {
+			continue
+		}
+
+		for additionalName, obj := range additionalProps {
+			newPath := append(path, name, additionalName)
+			missingProps = collectMissingProps(missingProps, newPath, obj, *prop.AdditionalProperties)
+		}
+	}
 	return missingProps
 }
 

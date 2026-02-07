@@ -867,6 +867,8 @@ components:
           type: object
           additionalProperties:
             type: object
+            required:
+              - href
             properties:
               href:
                 type: string

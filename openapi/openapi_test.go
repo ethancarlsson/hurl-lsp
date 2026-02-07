@@ -135,7 +135,8 @@ func TestGetOp(t *testing.T) {
 						"siblings": {
 							Type: "object",
 							AdditionalProperties: &openapi.Schema{
-								Type: "object",
+								Type:     "object",
+								Required: []string{"href"},
 								Properties: map[string]openapi.Schema{
 									"href": {Type: "string"},
 								},
