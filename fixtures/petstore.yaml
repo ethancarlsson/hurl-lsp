@@ -863,6 +863,13 @@ components:
             - available
             - pending
             - sold
+        siblings:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              href:
+                type: string
       xml:
         name: pet
     ApiResponse:

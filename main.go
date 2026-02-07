@@ -375,10 +375,13 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 	schemaPath := rawjson.PathToObj(req.Body.Value, currLine, col)
 	for _, path := range schemaPath {
 		innerSchema, ok := currentSchema.Properties[path.Name()]
-		if !ok {
+		if !ok && currentSchema.AdditionalProperties != nil {
+			innerSchema = *currentSchema.AdditionalProperties
+		} else if !ok {
 			currentSchema = openapi.Schema{}
 			break
 		}
+
 		var innerPropMap map[string]json.RawMessage
 		if path.IsArr() {
 			var innerPropMapList []map[string]json.RawMessage

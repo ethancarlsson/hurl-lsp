@@ -132,6 +132,15 @@ func TestGetOp(t *testing.T) {
 								},
 							},
 						},
+						"siblings": {
+							Type: "object",
+							AdditionalProperties: &openapi.Schema{
+								Type: "object",
+								Properties: map[string]openapi.Schema{
+									"href": {Type: "string"},
+								},
+							},
+						},
 					},
 				},
 			},

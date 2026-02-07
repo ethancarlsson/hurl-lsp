@@ -228,6 +228,7 @@ func TestCompletion(t *testing.T) {
 
 		expect.Equals(t, expectedPropertyNames, itemNames)
 	})
+
 	t.Run("request body completion inner list object", func(t *testing.T) {
 		conf.OpenapiDefPaths = []oaiPath{"./fixtures/petstore.yaml"}
 		params := &protocol.CompletionParams{
@@ -273,4 +274,54 @@ func TestCompletion(t *testing.T) {
 		expect.Equals(t, expectedPropertyNames, itemNames)
 	})
 
+	t.Run("request body completion additionalProperties", func(t *testing.T) {
+		conf.OpenapiDefPaths = []oaiPath{"./fixtures/petstore.yaml"}
+		params := &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{
+					URI: "./fixtures/test_request_body.hurl",
+				},
+				Position: protocol.Position{
+					Line:      16,
+					Character: 3,
+				},
+			},
+		}
+		// {
+		// 	"name": "Fido",
+		// 	"category": {
+		//
+		// 	},
+		//
+		// 	"tags": [
+		// 		{
+		//
+		//		"name": "test"
+		// 		}
+		// 	],
+		//	"siblings": {
+		//		"id123": {
+		//			<- HERE
+		//		}
+		//	}
+		// }
+		//
+
+		parseOpenapi()
+		parseDocument(params.TextDocument.URI)
+
+		is, err := completion(&ctx, params)
+		expect.NoErr(t, err)
+
+		items := is.([]protocol.CompletionItem)
+		expectedPropertyNames := []string{"href"}
+		itemNames := make([]string, 0, len(expectedPropertyNames))
+		for _, item := range items {
+			itemNames = append(itemNames, strings.Trim(item.Label, "\""))
+		}
+
+		slices.Sort(itemNames)
+
+		expect.Equals(t, expectedPropertyNames, itemNames)
+	})
 }

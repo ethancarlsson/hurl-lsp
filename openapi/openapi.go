@@ -137,14 +137,15 @@ type OpParam struct {
 }
 
 type Schema struct {
-	Type       string            `json:"type"`
-	Properties map[string]Schema `json:"properties"`
-	Required   []string          `json:"required"`
-	Ref        string            `json:"$ref"`
-	Items      *Schema           `json:"items"`
-	OneOf      []Schema          `json:"oneOf"`
-	AllOf      []Schema          `json:"allOf"`
-	AnyOf      []Schema          `json:"anyOf"`
+	Type                 string            `json:"type"`
+	Properties           map[string]Schema `json:"properties"`
+	Required             []string          `json:"required"`
+	Ref                  string            `json:"$ref"`
+	AdditionalProperties *Schema           `json:"additionalProperties"`
+	Items                *Schema           `json:"items"`
+	OneOf                []Schema          `json:"oneOf"`
+	AllOf                []Schema          `json:"allOf"`
+	AnyOf                []Schema          `json:"anyOf"`
 }
 
 func (s Schema) Combined(existingProps map[string]json.RawMessage) Schema {
@@ -225,6 +226,11 @@ func (s Schema) ToString(indent int) string {
 		props = s.Items.Properties
 	}
 
+	if s.AdditionalProperties != nil {
+		res += "<additionalProperties>"
+		props = s.AdditionalProperties.Properties
+	}
+
 	for k, p := range props {
 		res += "\n" + strings.Repeat(" ", indent+indentIncrement) + "- " + k + ": " + p.ToString(indent+indentIncrement)
 	}
@@ -249,6 +255,11 @@ func (o OAI) resolveSchemaRef(schema Schema) Schema {
 	if schema.Items != nil {
 		schemaItems := o.resolveSchemaRef(*schema.Items)
 		schema.Items = &schemaItems
+	}
+
+	if schema.AdditionalProperties != nil {
+		schemaAdditionalProperties := o.resolveSchemaRef(*schema.AdditionalProperties)
+		schema.AdditionalProperties = &schemaAdditionalProperties
 	}
 
 	if schema.Ref == "" {

@@ -10,5 +10,10 @@ POST {{url}}/pet
 
 			"name": "test"
 		}
-	]
+	],
+	"siblings": {
+		"id123": {
+
+		}
+	}
 }
