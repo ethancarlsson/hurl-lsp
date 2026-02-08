@@ -4,6 +4,7 @@
 package rawjson
 
 import (
+	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -117,8 +118,15 @@ type Pos struct {
 func PathToRange(lines []string, path []string) Range {
 	lenLines := len(lines)
 	lastCol := 0
+	isInArr := false
+
 	if lenLines > 0 {
 		lastCol = len(lines[lenLines-1]) - 1
+		curly := strings.Index(lines[0], "{")
+		square := strings.Index(lines[0], "[")
+		if square != -1 && (curly > square || curly == -1) {
+			isInArr = true
+		}
 	}
 
 	if len(path) == 0 {
@@ -134,26 +142,27 @@ func PathToRange(lines []string, path []string) Range {
 		}
 	}
 
+	nextPropertyName := path[0]
+
 	// Wrapped in function to take advantage of early return
-	pathStart := func() Pos {
+	getPathStart := func() Pos {
 		pathStart := Pos{}
-		pI := 0
 
 		for i, line := range lines {
 			pPointer := 0
 			for j, char := range line {
-				if pPointer >= len(path[pI]) {
+				if pPointer >= len(nextPropertyName) {
 					pathStart.Line = i
-					pathStart.Col = j - len(path[pI]) - 1
+					pathStart.Col = j - len(nextPropertyName) - 1
 					return pathStart
 				}
 
-				if rune(path[pI][pPointer]) == char {
+				if rune(nextPropertyName[pPointer]) == char {
 					pPointer += 1
 					continue
 				}
 
-				if rune(path[pI][pPointer]) != char {
+				if rune(nextPropertyName[pPointer]) != char {
 					pPointer = 0
 					continue
 				}
@@ -161,12 +170,62 @@ func PathToRange(lines []string, path []string) Range {
 		}
 
 		return pathStart
-	}()
+	}
+
+	getArrIndexPathStart := func() Pos {
+		pathStart := Pos{}
+		currentIndex := 0
+		onNextChar := false
+		startLooking := false
+
+		for i, line := range lines {
+			for j, char := range line {
+				if char == '[' {
+					startLooking = true
+				}
+
+				if !startLooking {
+					continue
+				}
+
+				if onNextChar && !unicode.IsSpace(char) {
+					pathStart.Line = i
+					pathStart.Col = j
+					return pathStart
+				}
+
+				if char == '[' && nextPropertyName == "0" {
+					onNextChar = true
+					continue
+				}
+
+				if char == ',' {
+					currentIndex += 1
+				}
+
+				if fmt.Sprintf("%d", currentIndex) == nextPropertyName {
+					onNextChar = true
+					continue
+				}
+			}
+		}
+
+		return pathStart
+	}
+
+	var pathStart Pos
+	if isInArr {
+		pathStart = getArrIndexPathStart()
+	} else {
+		pathStart = getPathStart()
+	}
 
 	pathEnd := func() Pos {
 		pathEnd := Pos{}
 		started := false
 		openCount := 0
+		entityOpener := '{'
+		entityCloser := '}'
 
 		for i, line := range lines {
 			if i < pathStart.Line {
@@ -178,17 +237,25 @@ func PathToRange(lines []string, path []string) Range {
 					continue
 				}
 
+				// If we haven't found the first '{' and the char
+				// is a '[' we know it's an array and we can treat.
+				// the whole thing as an array.
+				if openCount == 0 && char == '[' {
+					entityOpener = '['
+					entityCloser = ']'
+				}
+
 				started = true
 
-				if char == '{' {
+				if char == entityOpener {
 					openCount += 1
 				}
 
-				if char == '}' {
+				if char == entityCloser {
 					openCount -= 1
 				}
 
-				if char == '}' && openCount == 0 {
+				if char == entityCloser && openCount == 0 {
 					pathEnd.Line = i
 					pathEnd.Col = j
 					return pathEnd
@@ -232,7 +299,6 @@ func PathToRange(lines []string, path []string) Range {
 			Col:  endCol,
 		},
 	}
-	// return Range{pathStart, pathEnd}
 }
 
 // Accepts lines, line, and col and returns true if adding a property at that

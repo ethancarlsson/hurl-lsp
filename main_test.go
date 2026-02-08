@@ -395,6 +395,19 @@ func TestDiagnostics(t *testing.T) {
 					},
 					Message: `Missing required property "siblings/id123/href"`,
 				},
+				{
+					Range: protocol.Range{
+						Start: protocol.Position{
+							Line:      8,
+							Character: 2,
+						},
+						End: protocol.Position{
+							Line:      11,
+							Character: 2,
+						},
+					},
+					Message: `Missing required property "tags/0/id"`,
+				},
 			},
 		},
 	}

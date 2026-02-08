@@ -819,6 +819,8 @@ components:
         name: user
     Tag:
       type: object
+      required:
+        - id
       properties:
         id:
           type: integer

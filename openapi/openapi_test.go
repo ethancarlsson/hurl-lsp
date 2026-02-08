@@ -120,8 +120,9 @@ func TestGetOp(t *testing.T) {
 						"tags": {
 							Type: "array",
 							Items: &openapi.Schema{
-								Type: "object",
-								Ref:  "#/components/schemas/Tag",
+								Type:     "object",
+								Ref:      "#/components/schemas/Tag",
+								Required: []string{"id"},
 								Properties: map[string]openapi.Schema{
 									"id": {
 										Type: "integer",

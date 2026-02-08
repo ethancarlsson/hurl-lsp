@@ -329,6 +329,90 @@ func TestPathToRange(t *testing.T) {
 				End:   rawjson.Pos{6, 6},
 			},
 		},
+		{
+			name: "array",
+			jsonLines: `{
+				"test": [
+					{
+						"id": 123
+					},
+					{
+						"id": 123
+					},
+					{
+						"id": 123
+					}
+				]
+			}`,
+			path: []string{"test"},
+			expected: rawjson.Range{
+				Start: rawjson.Pos{1, 4},
+				End:   rawjson.Pos{11, 4},
+			},
+		},
+		{
+			name: "object inside array",
+			jsonLines: `{
+				"test": [
+					{
+						"id": 123
+					},
+					{
+						"id": 123
+					},
+					{
+						"id": 123
+					}
+				]
+			}`,
+			path: []string{"test", "0"},
+			expected: rawjson.Range{
+				Start: rawjson.Pos{2, 5},
+				End:   rawjson.Pos{4, 5},
+			},
+		},
+		{
+			name: "second object inside array",
+			jsonLines: `{
+				"test": [
+					{
+						"id": 123
+					},
+					{
+						"id": 123
+					},
+					{
+						"id": 123
+					}
+				]
+			}`,
+			path: []string{"test", "1"},
+			expected: rawjson.Range{
+				Start: rawjson.Pos{5, 5},
+				End:   rawjson.Pos{7, 5},
+			},
+		},
+		{
+			name: "last object inside array",
+			jsonLines: `{
+				"test": [
+					{
+						"id": 123
+					},
+					{
+						"id": 123
+					},
+					{
+						"id": 123
+					}
+				]
+			}`,
+			path: []string{"test", "2"},
+			expected: rawjson.Range{
+				Start: rawjson.Pos{8, 5},
+				End:   rawjson.Pos{10, 5},
+			},
+		},
 	}
 
 	for _, tt := range tests {

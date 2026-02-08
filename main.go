@@ -262,6 +262,28 @@ func collectMissingProps(missingProps [][]string, path []string, provided map[st
 			missingProps = collectMissingProps(missingProps, newPath, obj, *prop.AdditionalProperties)
 		}
 	}
+
+	for name, prop := range schema.Properties {
+		if prop.Items == nil {
+			continue
+		}
+
+		provided, ok := provided[name]
+		if !ok {
+			continue
+		}
+
+		var items []map[string]json.RawMessage
+		if err := json.Unmarshal(provided, &items); err != nil {
+			continue
+		}
+
+		for i, obj := range items {
+			newPath := append(path, name, fmt.Sprintf("%d", i))
+			missingProps = collectMissingProps(missingProps, newPath, obj, *prop.Items)
+		}
+	}
+
 	return missingProps
 }
 
