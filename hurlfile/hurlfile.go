@@ -286,24 +286,6 @@ func computeLineRange(line string, lineNum int) SourceRange {
 	}
 }
 
-func mergeRanges(r1, r2 SourceRange) SourceRange {
-	if r1.StartLine == 0 {
-		return r2
-	}
-	if r2.StartLine == 0 {
-		return r1
-	}
-	if r2.StartLine < r1.StartLine {
-		r1.StartLine = r2.StartLine
-		r1.StartCol = r2.StartCol
-	}
-	if r2.EndLine > r1.EndLine || (r2.EndLine == r1.EndLine && r2.EndCol > r1.EndCol) {
-		r1.EndLine = r2.EndLine
-		r1.EndCol = r2.EndCol
-	}
-	return r1
-}
-
 func isSpace(r rune) bool {
 	return r == ' ' || r == '\t'
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/ethancarlsson/hurl-lsp/completions"
@@ -171,7 +172,9 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 	}
 
 	var alreadyProvidedProps map[string]json.RawMessage
-	reqBody := rawjson.CleanTrailingCommas(strings.Join(req.Body.Value, "\n"))
+	bodyLines := slices.Clone(req.Body.Value)
+
+	reqBody := rawjson.CleanTrailingCommas(strings.Join(bodyLines, "\n"))
 	reqBody = rawjson.CleanVariables(reqBody)
 
 	if err := json.Unmarshal([]byte(reqBody), &alreadyProvidedProps); err != nil {
@@ -192,7 +195,7 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 		// path without the last element
 		objPath := propPath[:len(propPath)-1]
 
-		pathRange := rawjson.PathToRange(req.Body.Value, objPath)
+		pathRange := rawjson.PathToRange(bodyLines, objPath)
 
 		diagnostics = append(diagnostics, protocol.Diagnostic{
 			Range: protocol.Range{
@@ -421,7 +424,9 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 	}
 
 	var alreadyProvidedProps map[string]json.RawMessage
-	reqBody := rawjson.CleanTrailingCommas(strings.Join(req.Body.Value, "\n"))
+	bodyLines := slices.Clone(req.Body.Value)
+
+	reqBody := rawjson.CleanTrailingCommas(strings.Join(bodyLines, "\n"))
 	reqBody = rawjson.CleanVariables(reqBody)
 
 	if err := json.Unmarshal([]byte(reqBody), &alreadyProvidedProps); err != nil {
@@ -473,7 +478,7 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 		}
 	}
 
-	isOnLastProp := rawjson.IsOnLastProp(req.Body.Value, currLine, col)
+	isOnLastProp := rawjson.IsOnLastProp(bodyLines, currLine, col)
 
 	for name, schema := range currentSchema.Combined(alreadyProvidedProps).Properties {
 		if _, isAlreadyThere := alreadyProvidedProps[name]; isAlreadyThere {

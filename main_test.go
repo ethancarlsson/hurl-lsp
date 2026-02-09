@@ -40,6 +40,7 @@ func TestCompletion(t *testing.T) {
 		}
 
 		parseDocument(params.TextDocument.URI)
+		runDiagnostics()
 		is, err := completion(&ctx, params)
 		expect.NoErr(t, err)
 
@@ -76,6 +77,7 @@ func TestCompletion(t *testing.T) {
 		}
 
 		parseDocument(params.TextDocument.URI)
+		runDiagnostics()
 		is, err := completion(&ctx, params)
 		expect.NoErr(t, err)
 
@@ -163,6 +165,7 @@ func TestCompletion(t *testing.T) {
 		//
 
 		parseOpenapi()
+		runDiagnostics()
 		parseDocument(params.TextDocument.URI)
 
 		is, err := completion(&ctx, params)
@@ -213,6 +216,7 @@ func TestCompletion(t *testing.T) {
 
 		parseOpenapi()
 		parseDocument(params.TextDocument.URI)
+		runDiagnostics()
 
 		is, err := completion(&ctx, params)
 		expect.NoErr(t, err)
@@ -258,6 +262,7 @@ func TestCompletion(t *testing.T) {
 
 		parseOpenapi()
 		parseDocument(params.TextDocument.URI)
+		runDiagnostics()
 
 		is, err := completion(&ctx, params)
 		expect.NoErr(t, err)
@@ -309,6 +314,7 @@ func TestCompletion(t *testing.T) {
 
 		parseOpenapi()
 		parseDocument(params.TextDocument.URI)
+		runDiagnostics()
 
 		is, err := completion(&ctx, params)
 		expect.NoErr(t, err)
