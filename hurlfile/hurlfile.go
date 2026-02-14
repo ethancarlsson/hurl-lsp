@@ -118,7 +118,7 @@ func (p *Parser) skipCommentsAndEmpty() {
 // Recognizers
 var reMethodLine = regexp.MustCompile(`^[A-Z]+\b(?:\s+.+)?$`)
 var reResponseLine = regexp.MustCompile(`^HTTP[\/\d+]*(?:\.\d+)?\s+\d+`) // e.g. HTTP/1.1 200 or HTTP 400
-var reHeaderLine = regexp.MustCompile(`^[^:\s][^:]*\s*:\s*.*$`)
+var reHeaderLine = regexp.MustCompile("^[A-Za-z0-9!#$%&'*+.^_`|~-]+:\\s?.+$")
 var reSectionLine = regexp.MustCompile(`^\s*\[([A-Za-z0-9_-]*)\]\s*$`)
 
 func (p *Parser) Parse() (*HurlFile, error) {
