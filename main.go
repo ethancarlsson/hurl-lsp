@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -167,14 +168,37 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 	source := lsName
 	errorErr := protocol.DiagnosticSeverityError
 
+	bodyLines := slices.Clone(req.Body.Value)
+	reqBody := strings.Join(bodyLines, "\n")
+
+	if strings.TrimSpace(reqBody) == "" {
+		return diagnostics
+	}
+
+	if err := json.Unmarshal([]byte(reqBody), &struct{}{}); err != nil {
+		var syntaxErr *json.SyntaxError
+		isSyntax := errors.As(err, &syntaxErr)
+
+		if isSyntax {
+			jsonRange := rawjson.OffsetToPos(bodyLines, syntaxErr.Offset)
+			jsonRange.Start.Line += req.Body.Range.StartLine // push down to start of reqBody
+			jsonRange.End.Line += req.Body.Range.StartLine   // push down to start of reqBody
+			diagnostics = append(diagnostics, protocol.Diagnostic{
+				Range:    jsonRangeToProtocolRange(jsonRange),
+				Message:  fmt.Sprintf("Could not parse JSON %s", syntaxErr.Error()),
+				Source:   &source,
+				Severity: &errorErr,
+			})
+		}
+	}
+
 	if len(schema.Properties) == 0 {
 		return diagnostics
 	}
 
 	var alreadyProvidedProps map[string]json.RawMessage
-	bodyLines := slices.Clone(req.Body.Value)
 
-	reqBody := rawjson.CleanTrailingCommas(strings.Join(bodyLines, "\n"))
+	reqBody = rawjson.CleanTrailingCommas(reqBody)
 	reqBody = rawjson.CleanVariables(reqBody)
 
 	if err := json.Unmarshal([]byte(reqBody), &alreadyProvidedProps); err != nil {
@@ -299,6 +323,20 @@ func toProtocolRange(srcRange hurlfile.SourceRange) protocol.Range {
 		End: protocol.Position{
 			Line:      protocol.UInteger(srcRange.EndLine),
 			Character: protocol.UInteger(srcRange.EndCol),
+		},
+	}
+}
+
+// jsonPosToProtocolRange pads front and back cols to make lines the error more obvious
+func jsonRangeToProtocolRange(r rawjson.Range) protocol.Range {
+	return protocol.Range{
+		Start: protocol.Position{
+			Line:      protocol.UInteger(r.Start.Line),
+			Character: protocol.UInteger(r.Start.Col),
+		},
+		End: protocol.Position{
+			Line:      protocol.UInteger(r.End.Line),
+			Character: protocol.UInteger(r.End.Col),
 		},
 	}
 }

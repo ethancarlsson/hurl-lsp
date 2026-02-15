@@ -337,6 +337,18 @@ func TestDiagnostics(t *testing.T) {
 		conf.OpenapiDefPaths = []oaiPath{}
 	})
 
+	ignorePointers := func(p []protocol.Diagnostic) []protocol.Diagnostic {
+		ret := make([]protocol.Diagnostic, 0, len(p))
+		for _, d := range p {
+			d.Source = nil
+			d.Severity = nil
+
+			ret = append(ret, d)
+		}
+
+		return ret
+	}
+
 	tests := []struct {
 		filePath string
 		expected []protocol.Diagnostic
@@ -416,18 +428,24 @@ func TestDiagnostics(t *testing.T) {
 				},
 			},
 		},
-	}
-
-	ignorePointers := func(p []protocol.Diagnostic) []protocol.Diagnostic {
-		ret := make([]protocol.Diagnostic, 0, len(p))
-		for _, d := range p {
-			d.Source = nil
-			d.Severity = nil
-
-			ret = append(ret, d)
-		}
-
-		return ret
+		{
+			filePath: "./fixtures/test_partial_req.hurl",
+			expected: []protocol.Diagnostic{
+				{
+					Range: protocol.Range{
+						Start: protocol.Position{
+							Line:      4,
+							Character: 11,
+						},
+						End: protocol.Position{
+							Line:      4,
+							Character: 16,
+						},
+					},
+					Message: `Could not parse JSON invalid character '"' after object key`,
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {

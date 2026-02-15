@@ -2,7 +2,7 @@
 PATCH
 Authorization: Bearer {{jwt}}
 {
-	"hello": "test"
+	"hello"  "test"
 }
 
 		 GET https://example.com

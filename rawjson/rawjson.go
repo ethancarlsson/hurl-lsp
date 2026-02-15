@@ -359,3 +359,35 @@ var reHurlVariable = regexp.MustCompile("{{\\S+}}")
 func CleanVariables(str string) string {
 	return string(reHurlVariable.ReplaceAll([]byte(str), []byte("{}")))
 }
+
+func OffsetToPos(lines []string, offset int64) Range {
+	var counter int64 = 0
+	for i, line := range lines {
+		for j := range line {
+			if counter == offset {
+				return Range{
+					Start: Pos{
+						Line: i,
+						Col:  j,
+					},
+					End: Pos{
+						Line: i,
+						Col:  len(line),
+					},
+				}
+			}
+
+			counter += 1
+		}
+		counter += 1 // for the newline char
+	}
+
+	return Range{
+		Start: Pos{
+			Line: len(lines) - 1, // off the edge
+		},
+		End: Pos{
+			Line: len(lines) - 1, // off the edge
+		},
+	}
+}

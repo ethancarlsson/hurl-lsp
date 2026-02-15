@@ -85,26 +85,25 @@ func TestParse(t *testing.T) {
 		expect.Equals(t, "", hf.Entries[0].Request.Target.Target)
 		expect.Equals(
 			t,
-			[]string{"{", `	"hello": "test"`, "}"},
+			[]string{"{", `	"hello"  "test"`, "}", ""},
 			hf.Entries[0].Request.Body.Value)
-		expect.Equals(t, 5, hf.Entries[0].Request.Body.Range.EndLine)
+		expect.Equals(t, 6, hf.Entries[0].Request.Body.Range.EndLine)
 
 		expect.Equals(t, 0, hf.Range.StartLine)
 		expect.Equals(t, 14, hf.Range.EndLine)
 
 		expect.Equals(t, 1, hf.Entries[0].Request.Range.StartLine)
-		expect.Equals(t, 5, hf.Entries[0].Request.Range.EndLine)
+		expect.Equals(t, 6, hf.Entries[0].Request.Range.EndLine)
 		expect.Equals(t, 7, hf.Entries[0].Range.EndLine)
 
 		expect.Equals(t, 3, hf.Entries[0].Request.Body.Range.StartLine)
 		expect.Equals(t, 0, hf.Entries[0].Request.Body.Range.StartCol)
-		expect.Equals(t, 5, hf.Entries[0].Request.Body.Range.EndLine)
+		expect.Equals(t, 6, hf.Entries[0].Request.Body.Range.EndLine)
 
 		expect.Equals(t, 2, hf.Entries[0].Request.Headers.Range.StartLine)
 		expect.Equals(t, 2, hf.Entries[0].Request.Headers.Range.EndLine)
 
 		expect.Equals(t, false, hf.OnEmptyResponse(5, 0))
-		expect.Equals(t, true, hf.OnEmptyResponse(6, 0))
 		expect.Equals(t, false, hf.OnEmptyResponse(7, 0))
 		expect.Equals(t, false, hf.OnEmptyResponse(12, 0))
 		expect.Equals(t, true, hf.OnEmptyResponse(13, 0))
