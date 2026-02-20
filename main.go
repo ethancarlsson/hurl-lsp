@@ -7,6 +7,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/ethancarlsson/hurl-lsp/completions"
 	"github.com/ethancarlsson/hurl-lsp/diagnose"
@@ -14,6 +15,7 @@ import (
 	"github.com/ethancarlsson/hurl-lsp/openapi"
 	"github.com/ethancarlsson/hurl-lsp/rawjson"
 	"github.com/ethancarlsson/hurl-lsp/signaturehelp"
+	"github.com/ethancarlsson/hurl-lsp/state"
 	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -44,12 +46,11 @@ type config struct {
 var (
 	version string = "0.0.1"
 	handler protocol.Handler
-	lines   []string           = []string{}
-	hf      *hurlfile.HurlFile = &hurlfile.HurlFile{}
 
-	conf config      = config{}
-	oai  openapi.OAI = openapi.OAI{}
-	errs []error     = []error{}
+	conf    config       = config{}
+	oai     openapi.OAI  = openapi.OAI{}
+	errs    []error      = []error{}
+	updater func() error = nil
 )
 
 func main() {
@@ -88,14 +89,28 @@ func documentDidOpen(context *glsp.Context, params *protocol.DidOpenTextDocument
 }
 
 func documentDidChange(context *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
-	if err := parseDocument(params.TextDocument.URI); err != nil {
-		return err
-	}
-	diagnostics := runDiagnostics()
+	content := strings.Join(state.Lines(), "\n")
+	for _, cc := range params.ContentChanges {
+		switch v := cc.(type) {
+		case protocol.TextDocumentContentChangeEvent:
+			start := v.Range.Start.IndexIn(content)
+			end := v.Range.End.IndexIn(content)
+			content = content[:start] + v.Text + content[end:]
 
-	context.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
-		URI:         params.TextDocument.URI,
-		Diagnostics: diagnostics,
+		case protocol.TextDocumentContentChangeEventWhole:
+			content = v.Text
+		}
+	}
+
+	state.SetLines(strings.Split(content, "\n"))
+
+	state.ResetHf(100*time.Millisecond, func(*hurlfile.HurlFile) {
+		diagnostics := runDiagnostics()
+
+		context.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
+			URI:         params.TextDocument.URI,
+			Diagnostics: diagnostics,
+		})
 	})
 
 	return nil
@@ -123,7 +138,7 @@ func runDiagnostics() []protocol.Diagnostic {
 	infoErr := protocol.DiagnosticSeverityInformation
 	errorErr := protocol.DiagnosticSeverityError
 
-	for _, entry := range hf.Entries {
+	for _, entry := range state.Hf().Entries {
 		if d := diagnose.HTTPMethod(entry.Request.Method.Name); d.HasProblem {
 			diagnostics = append(diagnostics, protocol.Diagnostic{
 				Range:    toProtocolRange(entry.Request.Method.Range),
@@ -349,6 +364,9 @@ func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) 
 	line := int(params.Position.Line)
 	col := int(params.Position.Character) - 1 // zero base
 
+	lines := state.Lines()
+	hf := state.Hf()
+
 	sym := signaturehelp.Lines(lines).SymbolAt(line, col)
 	if desc := sym.Description(); desc.Desctiption != "" {
 		help := protocol.SignatureHelp{Signatures: []protocol.SignatureInformation{
@@ -407,6 +425,8 @@ func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) 
 
 func completion(context *glsp.Context, params *protocol.CompletionParams) (any, error) {
 	items := make([]protocol.CompletionItem, 0)
+	hf := state.Hf()
+
 	if hf == nil {
 		return items, nil
 	}
@@ -430,22 +450,22 @@ func completion(context *glsp.Context, params *protocol.CompletionParams) (any, 
 		items = completions.AddFilters(items)
 	}
 
-	items = addSpecAwareCompletions(items, line, col)
+	items = addSpecAwareCompletions(hf, items, line, col)
 
 	return items, nil
 }
 
-func addSpecAwareCompletions(items []protocol.CompletionItem, line, col int) []protocol.CompletionItem {
+func addSpecAwareCompletions(hf *hurlfile.HurlFile, items []protocol.CompletionItem, line, col int) []protocol.CompletionItem {
 	req := hf.GetReq(line, col)
 	op := oai.GetOp(req.Method.Name, strings.ReplaceAll(strings.ReplaceAll(req.Target.Target, "{{", "{"), "}}", "}"))
 
-	items = addUriCompletions(items, op, line, col)
-	items = addBodyCompletions(items, req, op, line, col)
+	items = addUriCompletions(hf, items, op, line, col)
+	items = addBodyCompletions(hf, items, req, op, line, col)
 
 	return items
 }
 
-func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, op openapi.Op, line, col int) []protocol.CompletionItem {
+func addBodyCompletions(hf *hurlfile.HurlFile, items []protocol.CompletionItem, req hurlfile.Request, op openapi.Op, line, col int) []protocol.CompletionItem {
 	if !hf.OnRequestBody(line, col) {
 		return items
 	}
@@ -533,7 +553,7 @@ func addBodyCompletions(items []protocol.CompletionItem, req hurlfile.Request, o
 	return items
 }
 
-func addUriCompletions(items []protocol.CompletionItem, op openapi.Op, line, col int) []protocol.CompletionItem {
+func addUriCompletions(hf *hurlfile.HurlFile, items []protocol.CompletionItem, op openapi.Op, line, col int) []protocol.CompletionItem {
 	if !hf.OnUri(line, col) {
 		return items
 	}
@@ -590,12 +610,8 @@ func parseDocument(uri string) error {
 		return fmt.Errorf("Failed to parse the hurl file %w", err)
 	}
 
-	lines = parsedLines
-
-	hf, err = hurlfile.Parse(lines)
-	if err != nil {
-		return fmt.Errorf("Failed to parse the hurl file %w", err)
-	}
+	state.SetLines(parsedLines)
+	state.SetHfFromLines(parsedLines)
 
 	return nil
 }

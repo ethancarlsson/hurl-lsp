@@ -17,15 +17,6 @@ func TestCompletion(t *testing.T) {
 		conf.OpenapiDefPaths = []oaiPath{}
 	})
 
-	t.Run("no hurlfile", func(t *testing.T) {
-		hf = nil
-		is, err := completion(&ctx, nil)
-		expect.NoErr(t, err)
-
-		items := is.([]protocol.CompletionItem)
-		expect.Equals(t, 0, len(items))
-	})
-
 	t.Run("resp section", func(t *testing.T) {
 		params := &protocol.CompletionParams{
 			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
