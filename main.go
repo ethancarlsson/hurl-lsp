@@ -47,10 +47,9 @@ var (
 	version string = "0.0.1"
 	handler protocol.Handler
 
-	conf    config       = config{}
-	oai     openapi.OAI  = openapi.OAI{}
-	errs    []error      = []error{}
-	updater func() error = nil
+	conf config      = config{}
+	oai  openapi.OAI = openapi.OAI{}
+	errs []error     = []error{}
 )
 
 func main() {
@@ -207,7 +206,7 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 		}
 	}
 
-	if len(schema.Properties) == 0 {
+	if len(schema.Properties.OrEmpty()) == 0 {
 		return diagnostics
 	}
 
@@ -220,7 +219,7 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 		return diagnostics
 	}
 
-	missingProps := make([][]string, 0, len(schema.Required))
+	missingProps := make([][]string, 0, len(schema.Required.OrEmpty()))
 
 	missingProps = append(missingProps, collectMissingProps(
 		missingProps, []string{},
@@ -234,7 +233,11 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 		// path without the last element
 		objPath := propPath[:len(propPath)-1]
 
-		pathRange := rawjson.PathToRange(bodyLines, objPath)
+		pathRange, err := rawjson.PathToRange(bodyLines, objPath)
+		var additionalPathErr string
+		if err != nil {
+			additionalPathErr = fmt.Sprintf(" could not read whole JSON: %s", err.Error())
+		}
 
 		diagnostics = append(diagnostics, protocol.Diagnostic{
 			Range: protocol.Range{
@@ -247,7 +250,7 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 					Character: protocol.UInteger(pathRange.End.Col),
 				},
 			},
-			Message:  fmt.Sprintf(`Missing required property "%s"`, strings.Join(propPath, "/")),
+			Message:  fmt.Sprintf(`Missing required property "%s"%s`, strings.Join(propPath, "/"), additionalPathErr),
 			Source:   &source,
 			Severity: &errorErr,
 		})
@@ -258,14 +261,14 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 }
 
 func collectMissingProps(missingProps [][]string, path []string, provided map[string]json.RawMessage, schema openapi.Schema) [][]string {
-	for _, required := range schema.Required {
+	for _, required := range schema.Required.OrEmpty() {
 		if _, ok := provided[required]; !ok {
 			missingProps = append(missingProps, append(path, required))
 		}
 	}
 
-	for name, prop := range schema.Properties {
-		if prop.Properties == nil {
+	for name, prop := range schema.Properties.OrEmpty() {
+		if prop.OrEmpty().Properties.Or(nil) == nil {
 			continue
 		}
 
@@ -281,11 +284,12 @@ func collectMissingProps(missingProps [][]string, path []string, provided map[st
 		}
 
 		newPath := append(path, name)
-		missingProps = collectMissingProps(missingProps, newPath, obj, propSchema)
+		missingProps = collectMissingProps(missingProps, newPath, obj, propSchema.OrEmpty())
 	}
 
-	for name, prop := range schema.Properties {
-		if prop.AdditionalProperties == nil {
+	for name, prop := range schema.Properties.OrEmpty() {
+		additionalProperties := prop.OrEmpty().AdditionalProperties.Or(nil)
+		if additionalProperties == nil {
 			continue
 		}
 
@@ -301,12 +305,13 @@ func collectMissingProps(missingProps [][]string, path []string, provided map[st
 
 		for additionalName, obj := range additionalProps {
 			newPath := append(path, name, additionalName)
-			missingProps = collectMissingProps(missingProps, newPath, obj, *prop.AdditionalProperties)
+			missingProps = collectMissingProps(missingProps, newPath, obj, *additionalProperties)
 		}
 	}
 
-	for name, prop := range schema.Properties {
-		if prop.Items == nil {
+	for name, prop := range schema.Properties.OrEmpty() {
+		propItems := prop.OrEmpty().Items.Or(nil)
+		if propItems == nil {
 			continue
 		}
 
@@ -322,7 +327,7 @@ func collectMissingProps(missingProps [][]string, path []string, provided map[st
 
 		for i, obj := range items {
 			newPath := append(path, name, fmt.Sprintf("%d", i))
-			missingProps = collectMissingProps(missingProps, newPath, obj, *prop.Items)
+			missingProps = collectMissingProps(missingProps, newPath, obj, *propItems)
 		}
 	}
 
@@ -394,7 +399,7 @@ func signatureHelp(context *glsp.Context, params *protocol.SignatureHelpParams) 
 				Label: op.Method + " " + op.Path,
 				Documentation: fmt.Sprintf(
 					"Summary: %s\nDescription: %s",
-					op.Detail.Summary, op.Detail.Description,
+					op.Detail.Summary.Or("N/A"), op.Detail.Description.Or("N/A"),
 				),
 				Parameters: signaturehelp.ParamsFromMap(op.Detail.Parameters.ToDocMap()),
 			},
@@ -472,7 +477,7 @@ func addBodyCompletions(hf *hurlfile.HurlFile, items []protocol.CompletionItem, 
 
 	currentSchema := op.Detail.RequestBody.Content.Json.Schema
 
-	if len(currentSchema.Properties) == 0 {
+	if len(currentSchema.Properties.OrEmpty()) == 0 {
 		return items
 	}
 
@@ -493,9 +498,10 @@ func addBodyCompletions(hf *hurlfile.HurlFile, items []protocol.CompletionItem, 
 
 	schemaPath := rawjson.PathToObj(req.Body.Value, currLine, col)
 	for _, path := range schemaPath {
-		innerSchema, ok := currentSchema.Properties[path.Name()]
-		if !ok && currentSchema.AdditionalProperties != nil {
-			innerSchema = *currentSchema.AdditionalProperties
+		innerSchema, ok := currentSchema.Properties.OrEmpty()[path.Name()]
+		currentSchemaAdditionalProps := currentSchema.AdditionalProperties.Or(nil)
+		if !ok && currentSchemaAdditionalProps != nil {
+			innerSchema = openapi.MParsedV(*currentSchemaAdditionalProps)
 		} else if !ok {
 			currentSchema = openapi.Schema{}
 			break
@@ -530,23 +536,24 @@ func addBodyCompletions(hf *hurlfile.HurlFile, items []protocol.CompletionItem, 
 
 		alreadyProvidedProps = innerPropMap
 		if path.IsArr() {
-			currentSchema = *innerSchema.Items
+			innerSchemaItems := innerSchema.OrEmpty().Items.OrEmpty()
+			currentSchema = *innerSchemaItems
 		} else {
-			currentSchema = innerSchema
+			currentSchema = innerSchema.OrEmpty()
 		}
 	}
 
 	isOnLastProp := rawjson.IsOnLastProp(bodyLines, currLine, col)
 
-	for name, schema := range currentSchema.Combined(alreadyProvidedProps).Properties {
+	for name, schema := range currentSchema.Combined(alreadyProvidedProps).Properties.OrEmpty() {
 		if _, isAlreadyThere := alreadyProvidedProps[name]; isAlreadyThere {
 			continue
 		}
 
 		if isOnLastProp {
-			items = completions.AddRequestBodyProperty(items, name, schema.Type, "")
+			items = completions.AddRequestBodyProperty(items, name, schema.OrEmpty().Type.OrEmpty(), "")
 		} else {
-			items = completions.AddRequestBodyProperty(items, name, schema.Type, ",")
+			items = completions.AddRequestBodyProperty(items, name, schema.OrEmpty().Type.OrEmpty(), ",")
 		}
 	}
 

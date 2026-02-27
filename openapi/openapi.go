@@ -15,6 +15,79 @@ var (
 	paramRe = regexp.MustCompile(`\{\w*\}`)
 )
 
+type MaybeParsed[T any] struct {
+	json.RawMessage
+
+	v    T
+	read bool
+	err  error
+}
+
+func (j MaybeParsed[T]) MarshalJSON() ([]byte, error) {
+	return json.Marshal(j.Or(*new(T)))
+}
+
+func (j MaybeParsed[T]) Read() (T, error) {
+	if j.read {
+		return j.v, j.err
+	}
+
+	var v T
+	if err := json.Unmarshal(j.RawMessage, &v); err != nil {
+		j.read = true
+		j.err = err
+
+		return v, err
+	}
+
+	j.set(v)
+
+	return v, nil
+}
+func (j *MaybeParsed[T]) set(v T) {
+	j.read = true
+	j.v = v
+}
+
+func (j MaybeParsed[T]) OrEmpty() T {
+	return j.Or(*new(T))
+}
+
+func (j MaybeParsed[T]) Or(or T) T {
+	v, err := j.Read()
+	if err != nil {
+		return or
+	}
+
+	return v
+}
+
+func (j MaybeParsed[T]) OrLazy(or func() T) T {
+	v, err := j.Read()
+	if err != nil {
+		return or()
+	}
+
+	return v
+}
+
+// MParsedV[alue] returns a MaybeParsed value where the value is alreay set; it will
+// not need to be parsed.
+func MParsedV[T any](v T) MaybeParsed[T] {
+	return MaybeParsed[T]{
+		v:    v,
+		read: true,
+	}
+}
+
+func MParsed[T any](j json.RawMessage) MaybeParsed[T] {
+	return MaybeParsed[T]{RawMessage: j}
+}
+
+func MParsedS(s string) MaybeParsed[string] {
+	return MaybeParsed[string]{RawMessage: json.RawMessage(`"` + s + `"`)}
+}
+
 type OAI struct {
 	Paths       map[string]json.RawMessage `json:"paths"`
 	Components  Components                 `json:"components"`
@@ -76,10 +149,10 @@ func (o OAI) ChildPaths(op Op) []string {
 }
 
 type OpDetail struct {
-	Summary     string      `json:"summary"`
-	Description string      `json:"description"`
-	Parameters  OpParams    `json:"parameters"`
-	RequestBody RequestBody `json:"requestBody"`
+	Summary     MaybeParsed[string] `json:"summary"`
+	Description MaybeParsed[string] `json:"description"`
+	Parameters  OpParams            `json:"parameters"`
+	RequestBody RequestBody         `json:"requestBody"`
 }
 
 type RequestBody struct {
@@ -100,7 +173,7 @@ type OpParams []OpParam
 func (ops OpParams) ToDocMap() map[string]string {
 	m := make(map[string]string, len(ops))
 	for _, op := range ops {
-		m[op.Name] = fmt.Sprintf("%s: %s=%s", op.In, op.Name, op.Schema.Type)
+		m[op.Name] = fmt.Sprintf("%s: %s=%s", op.In, op.Name, op.Schema.Type.OrEmpty())
 	}
 
 	return m
@@ -137,46 +210,68 @@ type OpParam struct {
 }
 
 type Schema struct {
-	Type                 string            `json:"type"`
-	Properties           map[string]Schema `json:"properties"`
-	Required             []string          `json:"required"`
-	Ref                  string            `json:"$ref"`
-	AdditionalProperties *Schema           `json:"additionalProperties"`
-	Items                *Schema           `json:"items"`
-	OneOf                []Schema          `json:"oneOf"`
-	AllOf                []Schema          `json:"allOf"`
-	AnyOf                []Schema          `json:"anyOf"`
+	Type                 MaybeParsed[string]                         `json:"type"`
+	Properties           MaybeParsed[map[string]MaybeParsed[Schema]] `json:"properties"`
+	Required             MaybeParsed[[]string]                       `json:"required"`
+	Ref                  MaybeParsed[string]                         `json:"$ref"`
+	AdditionalProperties MaybeParsed[*Schema]                        `json:"additionalProperties"`
+	Items                MaybeParsed[*Schema]                        `json:"items"`
+	OneOf                MaybeParsed[[]Schema]                       `json:"oneOf"`
+	AllOf                MaybeParsed[[]Schema]                       `json:"allOf"`
+	AnyOf                MaybeParsed[[]Schema]                       `json:"anyOf"`
+}
+
+func (s Schema) SchemaType() string {
+	var impliedType string
+	if ps, err := s.Properties.Read(); len(ps) > 0 && err != nil {
+		impliedType = "object"
+	} else if ads, err := s.AdditionalProperties.Read(); ads != nil && err != nil {
+		impliedType = "object"
+	} else if items, err := s.Items.Read(); items != nil && err != nil {
+		impliedType = "array"
+	}
+
+	t := s.Type.Or(impliedType)
+	if t == "" {
+		return impliedType
+	}
+
+	return t
 }
 
 func (s Schema) Combined(existingProps map[string]json.RawMessage) Schema {
-	for _, schema := range s.AnyOf {
-		if schema.Type != "" {
-			s.Type = schema.Type
+	for _, schema := range s.AnyOf.OrEmpty() {
+		if t := schema.Type.OrEmpty(); t != "" {
+			s.Type.set(t)
 		}
 
-		if len(schema.Properties) > 0 {
-			maps.Copy(s.Properties, schema.Properties)
-		}
-	}
-
-	for _, schema := range s.AllOf {
-		if schema.Type != "" {
-			s.Type = schema.Type
-		}
-
-		if len(schema.Properties) > 0 {
-			maps.Copy(s.Properties, schema.Properties)
+		if len(schema.Properties.OrEmpty()) > 0 {
+			props := s.Properties.OrEmpty()
+			maps.Copy(props, schema.Properties.OrEmpty())
+			s.Properties.set(props)
 		}
 	}
 
-	if len(s.OneOf) == 0 {
+	for _, schema := range s.AllOf.OrEmpty() {
+		if t := schema.Type.OrEmpty(); t != "" {
+			s.Type.set(t)
+		}
+
+		if len(schema.Properties.OrEmpty()) > 0 {
+			props := s.Properties.OrEmpty()
+			maps.Copy(props, schema.Properties.OrEmpty())
+			s.Properties.set(props)
+		}
+	}
+
+	if len(s.OneOf.OrEmpty()) == 0 {
 		return s
 	}
 
 	bestMatchPropCount := 0
-	matchingPropCounts := make([]int, len(s.OneOf))
-	for i, schema := range s.OneOf {
-		for name := range schema.Properties {
+	matchingPropCounts := make([]int, len(s.OneOf.OrEmpty()))
+	for i, schema := range s.OneOf.OrEmpty() {
+		for name := range schema.Properties.OrEmpty() {
 			if _, ok := existingProps[name]; ok {
 				matchingPropCounts[i] += 1
 			}
@@ -187,20 +282,22 @@ func (s Schema) Combined(existingProps map[string]json.RawMessage) Schema {
 		}
 	}
 
-	oneOfsToMerge := make([]Schema, 0, len(s.OneOf))
-	for i, schema := range s.OneOf {
+	oneOfsToMerge := make([]Schema, 0, len(s.OneOf.OrEmpty()))
+	for i, schema := range s.OneOf.OrEmpty() {
 		if matchingPropCounts[i] == bestMatchPropCount {
 			oneOfsToMerge = append(oneOfsToMerge, schema)
 		}
 	}
 
 	for _, schema := range oneOfsToMerge {
-		if schema.Type != "" {
-			s.Type = schema.Type
+		if t := schema.Type.OrEmpty(); t != "" {
+			s.Type.set(t)
 		}
 
-		if len(schema.Properties) > 0 {
-			maps.Copy(s.Properties, schema.Properties)
+		if len(schema.Properties.OrEmpty()) > 0 {
+			props := s.Properties.OrEmpty()
+			maps.Copy(props, schema.Properties.OrEmpty())
+			s.Properties.set(props)
 		}
 	}
 
@@ -208,31 +305,33 @@ func (s Schema) Combined(existingProps map[string]json.RawMessage) Schema {
 }
 
 func (s Schema) ToString(indent int) string {
-	res := s.Type
+	res := s.Type.OrEmpty()
 	const indentIncrement = 2
 
-	if len(s.OneOf) > 0 {
+	if len(s.OneOf.OrEmpty()) > 0 {
 		res += "oneOf"
-		for _, schema := range s.OneOf {
+		for _, schema := range s.OneOf.OrEmpty() {
 			res += "\n" + strings.Repeat(" ", indent+indentIncrement) + "| " + schema.ToString(indent+indentIncrement)
 		}
 
 		return res
 	}
 
-	props := s.Combined(make(map[string]json.RawMessage)).Properties
-	if s.Type == "array" && s.Items != nil {
-		res += "<" + s.Items.Type + ">"
-		props = s.Items.Properties
+	props := s.Combined(make(map[string]json.RawMessage)).Properties.OrEmpty()
+	items := s.Items.OrEmpty()
+	if s.Type.OrEmpty() == "array" && items != nil {
+		res += "<" + items.Type.OrEmpty() + ">"
+		props = items.Properties.OrEmpty()
 	}
 
-	if s.AdditionalProperties != nil {
+	additionalProps := s.AdditionalProperties.OrEmpty()
+	if additionalProps != nil {
 		res += "<additionalProperties>"
-		props = s.AdditionalProperties.Properties
+		props = additionalProps.Properties.OrEmpty()
 	}
 
 	for k, p := range props {
-		res += "\n" + strings.Repeat(" ", indent+indentIncrement) + "- " + k + ": " + p.ToString(indent+indentIncrement)
+		res += "\n" + strings.Repeat(" ", indent+indentIncrement) + "- " + k + ": " + p.OrEmpty().ToString(indent+indentIncrement)
 	}
 
 	return res
@@ -247,26 +346,29 @@ type Op struct {
 const undocumentedOpSummary = "Operation not documented"
 
 func (o Op) NotDocumented() bool {
-	return o.Detail.Summary == undocumentedOpSummary
+	return o.Detail.Summary.OrEmpty() == undocumentedOpSummary
 }
 
 func (o OAI) resolveSchemaRef(schema Schema) Schema {
 	schema = o.resolveSchemaCombiners(schema)
-	if schema.Items != nil {
-		schemaItems := o.resolveSchemaRef(*schema.Items)
-		schema.Items = &schemaItems
+	items := schema.Items.OrEmpty()
+	if items != nil {
+		schemaItems := o.resolveSchemaRef(*items)
+		schema.Items.set(&schemaItems)
 	}
 
-	if schema.AdditionalProperties != nil {
-		schemaAdditionalProperties := o.resolveSchemaRef(*schema.AdditionalProperties)
-		schema.AdditionalProperties = &schemaAdditionalProperties
+	additionalProps := schema.AdditionalProperties.OrEmpty()
+
+	if additionalProps != nil {
+		schemaAdditionalProperties := o.resolveSchemaRef(*additionalProps)
+		schema.AdditionalProperties.set(&schemaAdditionalProperties)
 	}
 
-	if schema.Ref == "" {
+	if schema.Ref.OrEmpty() == "" {
 		return schema
 	}
 
-	splitRefPtr := strings.Split(schema.Ref, "/")
+	splitRefPtr := strings.Split(schema.Ref.OrEmpty(), "/")
 
 	schemasI := slices.Index(splitRefPtr, "schemas")
 	if schemasI == -1 {
@@ -285,50 +387,59 @@ func (o OAI) resolveSchemaRef(schema Schema) Schema {
 		return schema
 	}
 
-	if schema.Type == "" {
-		schema.Type = refedSchema.Type
+	if schema.Type.OrEmpty() == "" {
+		schema.Type.set(refedSchema.Type.OrEmpty())
 	}
 
-	if schema.Properties == nil {
-		schema.Properties = make(map[string]Schema)
+	if schema.Properties.Or(nil) == nil {
+		schema.Properties.set(map[string]MaybeParsed[Schema]{})
 	}
-	if refedSchema.Properties == nil {
-		refedSchema.Properties = make(map[string]Schema)
+	if refedSchema.Properties.Or(nil) == nil {
+		refedSchema.Properties.set(map[string]MaybeParsed[Schema]{})
 	}
 
 	refedSchema = o.resolveSchemaCombiners(refedSchema)
-	if len(refedSchema.AllOf) > 0 {
-		schema.AllOf = refedSchema.AllOf
+	if len(refedSchema.AllOf.Or([]Schema{})) > 0 {
+		schema.AllOf.set(refedSchema.AllOf.Or([]Schema{}))
 	}
-	if len(refedSchema.OneOf) > 0 {
-		schema.OneOf = refedSchema.OneOf
+	if len(refedSchema.OneOf.Or([]Schema{})) > 0 {
+		schema.OneOf.set(refedSchema.OneOf.Or([]Schema{}))
 	}
-	if len(refedSchema.AnyOf) > 0 {
-		schema.AnyOf = refedSchema.AnyOf
+	if len(refedSchema.AnyOf.Or([]Schema{})) > 0 {
+		schema.AnyOf.set(refedSchema.AnyOf.Or([]Schema{}))
 	}
 
-	maps.Copy(schema.Properties, refedSchema.Properties)
-	schema.Required = refedSchema.Required
+	props := schema.Properties.Or(map[string]MaybeParsed[Schema]{})
+	maps.Copy(props, refedSchema.Properties.Or(map[string]MaybeParsed[Schema]{}))
+	schema.Required.set(refedSchema.Required.Or([]string{}))
 
-	for k, prop := range schema.Properties {
-		schema.Properties[k] = o.resolveSchemaRef(prop)
+	for k, prop := range props {
+		props[k] = MParsedV(o.resolveSchemaRef(prop.Or(Schema{})))
 	}
+
+	schema.Properties.set(props)
 
 	return schema
 }
 
 func (o OAI) resolveSchemaCombiners(schema Schema) Schema {
-	for i, s := range schema.AnyOf {
-		schema.AnyOf[i] = o.resolveSchemaRef(s)
+	anyOf := schema.AnyOf.Or([]Schema{})
+	for i, s := range anyOf {
+		anyOf[i] = o.resolveSchemaRef(s)
 	}
+	schema.AnyOf.set(anyOf)
 
-	for i, s := range schema.AllOf {
-		schema.AllOf[i] = o.resolveSchemaRef(s)
+	allOf := schema.AllOf.Or([]Schema{})
+	for i, s := range allOf {
+		allOf[i] = o.resolveSchemaRef(s)
 	}
+	schema.AllOf.set(allOf)
 
-	for i, s := range schema.OneOf {
-		schema.OneOf[i] = o.resolveSchemaRef(s)
+	oneOf := schema.OneOf.Or([]Schema{})
+	for i, s := range oneOf {
+		oneOf[i] = o.resolveSchemaRef(s)
 	}
+	schema.OneOf.set(oneOf)
 
 	return schema
 }
@@ -363,8 +474,8 @@ func (o OAI) GetOp(method, path string) Op {
 			Path:   path,
 			Method: method,
 			Detail: OpDetail{
-				Summary:     undocumentedOpSummary,
-				Description: "Path not found in provided openapi spec",
+				Summary:     MParsedS(undocumentedOpSummary),
+				Description: MParsedS("Path not found in provided openapi spec"),
 			},
 		}
 	}
@@ -378,9 +489,11 @@ func (o OAI) GetOp(method, path string) Op {
 	pathContent := make(map[string]OpDetail, httpMethodsCount)
 
 	if err := json.Unmarshal(rawPathContent, &pathContent); err != nil {
+		op.Path = path
+		op.Method = method
 		op.Detail = OpDetail{
-			Summary:     undocumentedOpSummary,
-			Description: "Documentation is malformed json/yaml",
+			Summary:     MParsedS(undocumentedOpSummary),
+			Description: MParsedS("Documentation is malformed json/yaml"),
 		}
 
 		return op
@@ -390,13 +503,13 @@ func (o OAI) GetOp(method, path string) Op {
 
 	if !ok {
 		op.Detail = OpDetail{
-			Summary: undocumentedOpSummary,
-			Description: fmt.Sprintf(
+			Summary: MParsedS(undocumentedOpSummary),
+			Description: MParsedS(fmt.Sprintf(
 				"%s: undocumented method %s. The following methods are documented for this path %s.",
 				pathInSpec,
 				strings.ToUpper(method),
 				strings.ToUpper(strings.Join(mapKeys(pathContent), ",")),
-			),
+			)),
 		}
 
 		return op
@@ -494,7 +607,6 @@ func Parse(ftype string, fContents []byte) (OAI, error) {
 	for p := range oai.Paths {
 		re, err := regexp.Compile(string(paramRe.ReplaceAll([]byte(p), []byte(`[a-zA-Z0-9_{}]+`))))
 		if err != nil {
-			println("err", fail(err).Error())
 			continue
 		}
 

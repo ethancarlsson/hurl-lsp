@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethancarlsson/hurl-lsp/expect"
 	"github.com/ethancarlsson/hurl-lsp/rawjson"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPathToObj(t *testing.T) {
@@ -413,14 +414,48 @@ func TestPathToRange(t *testing.T) {
 				End:   rawjson.Pos{10, 5},
 			},
 		},
+		{
+			name: "with curly braces inside string properties",
+			jsonLines: `{
+        
+                "name": "",
+                "category": {},
+        
+                "tags": [],
+                "siblings": {"":{"{":"{"}}
+        }`,
+			path: []string{"siblings", ""},
+			expected: rawjson.Range{
+				Start: rawjson.Pos{6, 29},
+				End:   rawjson.Pos{6, 40},
+			},
+		},
+		{
+			name: "with string escape chars",
+			jsonLines: `{
+        
+                "name": "",
+                "category": {},
+        
+                "tags": [],
+                "siblings": {"":{"":"\""}}
+        }`,
+			path: []string{"siblings", ""},
+			expected: rawjson.Range{
+				Start: rawjson.Pos{6, 29},
+				End:   rawjson.Pos{6, 40},
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			expect.Equals(t, tt.expected, rawjson.PathToRange(
+			actual, err := rawjson.PathToRange(
 				strings.Split(tt.jsonLines, "\n"),
 				tt.path,
-			))
+			)
+			assert.NoError(t, err)
+			expect.Equals(t, tt.expected, actual)
 		})
 	}
 }

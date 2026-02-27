@@ -8,9 +8,22 @@ import (
 
 	"github.com/ethancarlsson/hurl-lsp/expect"
 	"github.com/ethancarlsson/hurl-lsp/openapi"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParse(t *testing.T) {
+	expectedPetSchema := openapi.Schema{
+		Required: openapi.MParsedV([]string{"name", "photoUrls"}),
+		Type:     openapi.MParsedS("object"),
+		Properties: openapi.MParsedV(map[string]openapi.MaybeParsed[openapi.Schema]{
+			"id": openapi.MParsedV(openapi.Schema{}),
+			"name": openapi.MParsedV(openapi.Schema{
+				Type: openapi.MParsedS("string"),
+			}),
+		}),
+	}
 	t.Run("yaml", func(t *testing.T) {
 		contents, err := os.ReadFile("../fixtures/petstore.yaml")
 		expect.NoErr(t, err)
@@ -19,50 +32,231 @@ func TestParse(t *testing.T) {
 		expect.NoErr(t, err)
 		expect.Equals(t, 13, len(oai.Paths))
 	})
+
+	tests := []struct {
+		name        string
+		in          string
+		expected    openapi.OAI
+		expectedOps []openapi.Op
+	}{
+		{
+			name: "empty",
+			in:   ``,
+		},
+		{
+			name: "op not a struct",
+			in: `
+paths:
+  /pet: this op is a string`,
+			expectedOps: []openapi.Op{
+				{
+					Method: "put",
+					Path:   "/pet",
+					Detail: openapi.OpDetail{
+						Summary:     openapi.MParsedS("Operation not documented"),
+						Description: openapi.MParsedS("Documentation is malformed json/yaml"),
+					},
+				},
+			},
+		},
+		{
+			name: "invalid description type",
+			in: `
+paths:
+  /pet/findByStatus:
+    get:
+      summary: Finds Pets by status.
+      description: 
+        - an array for some reason
+      operationId: findPetsByStatus
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Pet'
+            application/xml:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Pet'
+        '400':
+          description: Invalid status value
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"`,
+			expectedOps: []openapi.Op{
+				{
+					Method: "get",
+					Path:   "/pet/findByStatus",
+					Detail: openapi.OpDetail{
+						Summary:     openapi.MParsedS("Finds Pets by status."),
+						Description: openapi.MParsedS("ERROR"),
+					},
+				},
+			},
+		},
+		{
+			name: "invalid property type does not break on reading other props",
+			in: `
+paths:
+  /pet:
+    post:
+      tags:
+        - pet
+      summary: Add a new pet to the store.
+      description: Add a new pet to the store.
+      operationid: addPet
+      requestbody:
+        description: create a new pet in the store
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/pet'
+        required: true
+components:
+  schemas:
+    pet:
+      required:
+        - name
+        - photoUrls
+      type: object
+      properties:
+        id: invalid property schema
+        name:
+          type: string
+          example: doggie
+        category:
+          $ref: '#/components/schemas/category'
+        photoUrls:
+          type: array
+          xml:
+            wrapped: true
+          items:
+            type: string
+            xml:
+              name: photoUrl
+        tags:
+          type: array
+          xml:
+            wrapped: true
+          items:
+            $ref: '#/components/schemas/tag'
+        status:
+          type: string
+          description: pet status in the store
+          enum:
+            - available
+            - pending
+            - sold
+        siblings:
+          type: object
+          additionalproperties:
+            type: object
+            required:
+              - href
+            properties:
+              href:
+                type: string`,
+			expectedOps: []openapi.Op{
+				{
+					Method: "post",
+					Path:   "/pet",
+					Detail: openapi.OpDetail{
+						Summary:     openapi.MParsedS("Add a new pet to the store."),
+						Description: openapi.MParsedS("Add a new pet to the store."),
+						RequestBody: openapi.RequestBody{
+							Content: openapi.RequestBodyContent{
+								Json: openapi.BodySchema{
+									Schema: expectedPetSchema,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("partially valid values can be read - %s", tt.name), func(t *testing.T) {
+			oai, err := openapi.Parse("yaml", []byte(tt.in))
+			require.NoError(t, err)
+			for _, expectedOp := range tt.expectedOps {
+				op := oai.GetOp(expectedOp.Method, expectedOp.Path)
+				assert.Equal(t, expectedOp.Method, op.Method)
+				assert.Equal(t, expectedOp.Path, op.Path)
+				assert.Equal(t, expectedOp.Detail.Description.Or("ERROR"), op.Detail.Description.Or("ERROR"))
+				sum, err := expectedOp.Detail.Summary.Read()
+				require.NoError(t, err)
+				actualSum, err := op.Detail.Summary.Read()
+				assert.Equal(t, sum, actualSum)
+				expectedSchema := expectedOp.Detail.RequestBody.Content.Json.Schema
+				actualSchema := op.Detail.RequestBody.Content.Json.Schema
+				assert.Equal(t, expectedSchema.Required, actualSchema.Required)
+
+				actualProps := actualSchema.Properties.Or(map[string]openapi.MaybeParsed[openapi.Schema]{})
+				expectedProps := expectedSchema.Properties.Or(map[string]openapi.MaybeParsed[openapi.Schema]{})
+				for k, expectedProp := range expectedProps {
+					actualProp, ok := actualProps[k]
+					assert.True(t, ok, `expected prop "%s" but not found in %v`, k, actualProps)
+					p, err := actualProp.Read()
+					expectedP, expectedErr := expectedProp.Read()
+					assert.Equal(t, expectedP.Type.OrEmpty(), p.Type.Or(""))
+					assert.Equal(t, err, expectedErr)
+				}
+			}
+		})
+	}
 }
 
 func TestSchemaCombined(t *testing.T) {
 	t.Run("with allOf combines all values and no existing properties", func(t *testing.T) {
 		schema := openapi.Schema{
-			Ref:        "#/components/schemas/Category",
-			Properties: map[string]openapi.Schema{},
-			AllOf: []openapi.Schema{
+			Ref:        openapi.MParsedS("#/components/schemas/Category"),
+			Properties: openapi.MParsedV(map[string]openapi.MaybeParsed[openapi.Schema]{}),
+			AllOf: openapi.MParsedV([]openapi.Schema{
 				{
-					Type: "object",
-					Properties: map[string]openapi.Schema{
-						"id": {
-							Type: "integer",
-						},
-						"name": {
-							Type: "string",
-						},
-					},
+					Type: openapi.MParsedV("object"),
+					Properties: openapi.MParsedV(map[string]openapi.MaybeParsed[openapi.Schema]{
+						"id": openapi.MParsedV(openapi.Schema{
+							Type: openapi.MParsedV("integer"),
+						}),
+						"name": openapi.MParsedV(openapi.Schema{
+							Type: openapi.MParsedV("string"),
+						}),
+					}),
 				},
 				{
-					Type: "object",
-					Properties: map[string]openapi.Schema{
-						"rank": {
-							Type: "integer",
-						},
-					},
+					Type: openapi.MParsedV("object"),
+					Properties: openapi.MParsedV(map[string]openapi.MaybeParsed[openapi.Schema]{
+						"rank": openapi.MParsedV(openapi.Schema{
+							Type: openapi.MParsedV("integer"),
+						}),
+					}),
 				},
-			},
+			}),
 		}
 
 		actual := schema.Combined(map[string]json.RawMessage{})
 
-		expect.Equals(t, actual.Type, "object")
-		expect.Equals(t, actual.Properties, map[string]openapi.Schema{
-
-			"id": {
-				Type: "integer",
-			},
-			"name": {
-				Type: "string",
-			},
-			"rank": {
-				Type: "integer",
-			},
+		expect.Equals(t, actual.Type.Or("-"), "object")
+		expect.Equals(t, actual.Properties.Or(map[string]openapi.MaybeParsed[openapi.Schema]{}), map[string]openapi.MaybeParsed[openapi.Schema]{
+			"id": openapi.MParsedV(openapi.Schema{
+				Type: openapi.MParsedV("integer"),
+			}),
+			"name": openapi.MParsedV(openapi.Schema{
+				Type: openapi.MParsedV("string"),
+			}),
+			"rank": openapi.MParsedV(openapi.Schema{
+				Type: openapi.MParsedV("integer"),
+			}),
 		})
 	})
 }
@@ -73,77 +267,122 @@ func TestGetOp(t *testing.T) {
 		Content: openapi.RequestBodyContent{
 			Json: openapi.BodySchema{
 				Schema: openapi.Schema{
-					Type:     "object",
-					Ref:      "#/components/schemas/Pet",
-					Required: []string{"name", "photoUrls"},
-					Properties: map[string]openapi.Schema{
-						"category": {
-							Ref:        "#/components/schemas/Category",
-							Properties: map[string]openapi.Schema{},
-							AllOf: []openapi.Schema{
+					Type:     openapi.MParsedV("object"),
+					Ref:      openapi.MParsedV("#/components/schemas/Pet"),
+					Required: openapi.MParsedV([]string{"name", "photoUrls"}),
+					Properties: openapi.MParsedV(map[string]openapi.MaybeParsed[openapi.Schema]{
+						"category": openapi.MParsedV(openapi.Schema{
+							Ref:        openapi.MParsedV("#/components/schemas/Category"),
+							Properties: openapi.MParsedV(map[string]openapi.MaybeParsed[openapi.Schema]{}),
+							Required:   openapi.MParsedV([]string{}),
+							OneOf:      openapi.MParsedV([]openapi.Schema{}),
+							AnyOf:      openapi.MParsedV([]openapi.Schema{}),
+							AllOf: openapi.MParsedV([]openapi.Schema{
 								{
-									Type: "object",
-									Properties: map[string]openapi.Schema{
-										"id": {
-											Type: "integer",
-										},
-										"name": {
-											Type: "string",
-										},
-									},
+									Type: openapi.MParsedV("object"),
+									Properties: openapi.MParsedV(map[string]openapi.MaybeParsed[openapi.Schema]{
+										"id": openapi.MParsedV(openapi.Schema{
+											Type: openapi.MParsedV("integer"),
+										}),
+										"name": openapi.MParsedV(openapi.Schema{
+											Type: openapi.MParsedV("string"),
+										}),
+									}),
+									OneOf: openapi.MParsedV([]openapi.Schema{}),
+									AnyOf: openapi.MParsedV([]openapi.Schema{}),
+									AllOf: openapi.MParsedV([]openapi.Schema{}),
 								},
 								{
-									Type: "object",
-									Properties: map[string]openapi.Schema{
-										"rank": {
-											Type: "integer",
-										},
-									},
+									Type: openapi.MParsedV("object"),
+									Properties: openapi.MParsedV(map[string]openapi.MaybeParsed[openapi.Schema]{
+										"rank": openapi.MParsedV(openapi.Schema{
+											Type: openapi.MParsedV("integer"),
+										}),
+									}),
+									OneOf: openapi.MParsedV([]openapi.Schema{}),
+									AnyOf: openapi.MParsedV([]openapi.Schema{}),
+									AllOf: openapi.MParsedV([]openapi.Schema{}),
 								},
-							},
-						},
-						"id": {
-							Type: "integer",
-						},
-						"name": {
-							Type: "string",
-						},
-						"photoUrls": {
-							Type: "array",
-							Items: &openapi.Schema{
-								Type: "string",
-							},
-						},
-						"status": {
-							Type: "string",
-						},
-						"tags": {
-							Type: "array",
-							Items: &openapi.Schema{
-								Type:     "object",
-								Ref:      "#/components/schemas/Tag",
-								Required: []string{"id"},
-								Properties: map[string]openapi.Schema{
-									"id": {
-										Type: "integer",
-									},
-									"name": {
-										Type: "string",
-									},
-								},
-							},
-						},
-						"siblings": {
-							Type: "object",
-							AdditionalProperties: &openapi.Schema{
-								Type:     "object",
-								Required: []string{"href"},
-								Properties: map[string]openapi.Schema{
-									"href": {Type: "string"},
-								},
-							},
-						},
-					},
+							}),
+						}),
+						"id": openapi.MParsedV(openapi.Schema{
+							Type:  openapi.MParsedV("integer"),
+							OneOf: openapi.MParsedV([]openapi.Schema{}),
+							AnyOf: openapi.MParsedV([]openapi.Schema{}),
+							AllOf: openapi.MParsedV([]openapi.Schema{}),
+						}),
+						"name": openapi.MParsedV(openapi.Schema{
+							Type:  openapi.MParsedV("string"),
+							OneOf: openapi.MParsedV([]openapi.Schema{}),
+							AnyOf: openapi.MParsedV([]openapi.Schema{}),
+							AllOf: openapi.MParsedV([]openapi.Schema{}),
+						}),
+						"photoUrls": openapi.MParsedV(openapi.Schema{
+							Type: openapi.MParsedV("array"),
+							Items: openapi.MParsedV(&openapi.Schema{
+								Type:  openapi.MParsedV("string"),
+								OneOf: openapi.MParsedV([]openapi.Schema{}),
+								AnyOf: openapi.MParsedV([]openapi.Schema{}),
+								AllOf: openapi.MParsedV([]openapi.Schema{}),
+							}),
+							OneOf: openapi.MParsedV([]openapi.Schema{}),
+							AnyOf: openapi.MParsedV([]openapi.Schema{}),
+							AllOf: openapi.MParsedV([]openapi.Schema{}),
+						}),
+						"status": openapi.MParsedV(openapi.Schema{
+							Type:  openapi.MParsedV("string"),
+							OneOf: openapi.MParsedV([]openapi.Schema{}),
+							AnyOf: openapi.MParsedV([]openapi.Schema{}),
+							AllOf: openapi.MParsedV([]openapi.Schema{}),
+						}),
+						"tags": openapi.MParsedV(openapi.Schema{
+							Type: openapi.MParsedV("array"),
+							Items: openapi.MParsedV(&openapi.Schema{
+								Type:     openapi.MParsedV("object"),
+								Ref:      openapi.MParsedV("#/components/schemas/Tag"),
+								Required: openapi.MParsedV([]string{"id"}),
+								Properties: openapi.MParsedV(map[string]openapi.MaybeParsed[openapi.Schema]{
+									"id": openapi.MParsedV(openapi.Schema{
+										Type:  openapi.MParsedV("integer"),
+										OneOf: openapi.MParsedV([]openapi.Schema{}),
+										AnyOf: openapi.MParsedV([]openapi.Schema{}),
+										AllOf: openapi.MParsedV([]openapi.Schema{}),
+									}),
+									"name": openapi.MParsedV(openapi.Schema{
+										Type:  openapi.MParsedV("string"),
+										OneOf: openapi.MParsedV([]openapi.Schema{}),
+										AnyOf: openapi.MParsedV([]openapi.Schema{}),
+										AllOf: openapi.MParsedV([]openapi.Schema{}),
+									}),
+								}),
+								OneOf: openapi.MParsedV([]openapi.Schema{}),
+								AnyOf: openapi.MParsedV([]openapi.Schema{}),
+								AllOf: openapi.MParsedV([]openapi.Schema{}),
+							}),
+							OneOf: openapi.MParsedV([]openapi.Schema{}),
+							AnyOf: openapi.MParsedV([]openapi.Schema{}),
+							AllOf: openapi.MParsedV([]openapi.Schema{}),
+						}),
+						"siblings": openapi.MParsedV(openapi.Schema{
+							Type: openapi.MParsedV("object"),
+							AdditionalProperties: openapi.MParsedV(&openapi.Schema{
+								Type:     openapi.MParsedV("object"),
+								Required: openapi.MParsedV([]string{"href"}),
+								Properties: openapi.MParsedV(map[string]openapi.MaybeParsed[openapi.Schema]{
+									"href": openapi.MParsedV(openapi.Schema{Type: openapi.MParsedV("string")}),
+								}),
+								OneOf: openapi.MParsedV([]openapi.Schema{}),
+								AnyOf: openapi.MParsedV([]openapi.Schema{}),
+								AllOf: openapi.MParsedV([]openapi.Schema{}),
+							}),
+							OneOf: openapi.MParsedV([]openapi.Schema{}),
+							AnyOf: openapi.MParsedV([]openapi.Schema{}),
+							AllOf: openapi.MParsedV([]openapi.Schema{}),
+						}),
+					}),
+					OneOf: openapi.MParsedV([]openapi.Schema{}),
+					AnyOf: openapi.MParsedV([]openapi.Schema{}),
+					AllOf: openapi.MParsedV([]openapi.Schema{}),
 				},
 			},
 		},
@@ -180,6 +419,17 @@ func TestGetOp(t *testing.T) {
 			expectPath:    "/pet/findByStatus",
 			expectSummary: "Finds Pets by status.",
 			expectDesc:    "Multiple status values can be provided with comma separated strings.",
+			expectRequestBody: openapi.RequestBody{
+				Content: openapi.RequestBodyContent{
+					Json: openapi.BodySchema{
+						Schema: openapi.Schema{
+							OneOf: openapi.MParsedV([]openapi.Schema{}),
+							AnyOf: openapi.MParsedV([]openapi.Schema{}),
+							AllOf: openapi.MParsedV([]openapi.Schema{}),
+						},
+					},
+				},
+			},
 		},
 		{
 			method:        "get",
@@ -188,6 +438,17 @@ func TestGetOp(t *testing.T) {
 			expectPath:    "/pet/findByTags",
 			expectSummary: "Finds Pets by tags.",
 			expectDesc:    "Multiple tags can be provided with comma separated strings. Use tag1, tag2, tag3 for testing.",
+			expectRequestBody: openapi.RequestBody{
+				Content: openapi.RequestBodyContent{
+					Json: openapi.BodySchema{
+						Schema: openapi.Schema{
+							OneOf: openapi.MParsedV([]openapi.Schema{}),
+							AnyOf: openapi.MParsedV([]openapi.Schema{}),
+							AllOf: openapi.MParsedV([]openapi.Schema{}),
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -198,16 +459,19 @@ func TestGetOp(t *testing.T) {
 
 			oai, err := openapi.Parse("yaml", contents)
 
-			expect.NoErr(t, err)
+			require.NoError(t, err)
 			op := oai.GetOp(tt.method, tt.path)
-			expect.Equals(t, tt.expectMethod, op.Method)
-			expect.Equals(t, tt.expectPath, op.Path)
-			expect.Equals(t, tt.expectSummary, op.Detail.Summary)
-			expect.Equals(t, tt.expectDesc, op.Detail.Description)
+			assert.Equal(t, tt.expectMethod, op.Method)
+			assert.Equal(t, tt.expectPath, op.Path)
+			s, _ := op.Detail.Summary.Read()
+			assert.Equal(t, tt.expectSummary, s)
+			assert.Equal(t, tt.expectDesc, op.Detail.Description.Or(""))
+
 			expectedReq, err := json.Marshal(tt.expectRequestBody)
-			expect.NoErr(t, err)
+			assert.NoError(t, err)
 			actualReq, err := json.Marshal(op.Detail.RequestBody)
-			expect.Equals(t, string(expectedReq), string(actualReq))
+			require.NoError(t, err)
+			assert.Equal(t, string(expectedReq), string(actualReq))
 		})
 	}
 }

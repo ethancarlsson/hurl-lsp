@@ -1,13 +1,20 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/ethancarlsson/hurl-lsp/expect"
+	"github.com/ethancarlsson/hurl-lsp/openapi"
+	"github.com/ethancarlsson/hurl-lsp/state"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
+	"pgregory.net/rapid"
 )
 
 func TestCompletion(t *testing.T) {
@@ -448,4 +455,172 @@ func TestDiagnostics(t *testing.T) {
 			expect.Equals(t, tc.expected, ignorePointers(runDiagnostics()))
 		})
 	}
+}
+
+type nestedStruct struct {
+	ID    int               `json:"id"`
+	Tags  []string          `json:"tags"`
+	Attrs map[string]string `json:"attrs"`
+}
+
+type deepNested struct {
+	Matrix   [][]int                    `json:"matrix"`
+	Lookup   map[string][]*nestedStruct `json:"lookup"`
+	Optional *nestedStruct              `json:"optional"`
+}
+
+type structOfEverything struct {
+	// Basic maps
+	IntMap  map[string]int                 `json:"int_map"`
+	StrMap  map[string]string              `json:"str_map"`
+	MapMap  map[string]map[int]int         `json:"map_map"`
+	ArrMap  map[string][]map[string]string `json:"arr_map"`
+	BoolMap map[string]bool                `json:"bool_map"`
+
+	// Basic values
+	Str   string  `json:"str"`
+	Int   int     `json:"int"`
+	Float float64 `json:"float"`
+	Bool  bool    `json:"bool"`
+
+	// Deep nesting
+	Deep deepNested `json:"deep"`
+}
+
+func TestProperties(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		var (
+			name     = rapid.String().Draw(t, "name")
+			category = rapid.Make[structOfEverything]().Draw(t, "category")
+			tags     = rapid.SliceOf(rapid.MapOf(rapid.String(), rapid.String())).Draw(t, "tags")
+			siblings = rapid.MapOf(rapid.String(), rapid.MapOf(rapid.String(), rapid.String())).Draw(t, "siblings")
+		)
+		categoryJSON, _ := json.Marshal(category)
+		tagsJSON, _ := json.Marshal(tags)
+		siblingsJSON, _ := json.Marshal(siblings)
+		contents := fmt.Sprintf(`POST {{url}}/pet
+{
+
+	"name": "%s",
+	"category": %s,
+
+	"tags": %s,
+	"siblings": %s
+}`, name, string(categoryJSON), string(tagsJSON), string(siblingsJSON))
+		oaiContents := `
+{
+  "paths": {
+    "/pet": {
+      "post": {
+        "tags": [
+          "pet"
+        ],
+        "summary": "add a new pet to the store.",
+        "description": "add a new pet to the store.",
+        "operationid": "addpet",
+        "requestbody": {
+          "description": "create a new pet in the store",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/pet"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "pet": {
+        "required": [
+          "name",
+          "photourls"
+        ],
+        "type": "object",
+        "properties": {
+          "id": "invalid property schema",
+          "name": {
+            "type": "string",
+            "example": "doggie"
+          },
+          "category": {
+            "$ref": "#/components/schemas/category"
+          },
+          "photourls": {
+            "type": "array",
+            "xml": {
+              "wrapped": true
+            },
+            "items": {
+              "type": "string",
+              "xml": {
+                "name": "photourl"
+              }
+            }
+          },
+          "tags": {
+            "type": "array",
+            "xml": {
+              "wrapped": true
+            },
+            "items": {
+              "$ref": "#/components/schemas/tag"
+            }
+          },
+          "status": {
+            "type": "string",
+            "description": "pet status in the store",
+            "enum": [
+              "available",
+              "pending",
+              "sold"
+            ]
+          },
+          "siblings": {
+            "type": "object",
+            "additionalproperties": {
+              "type": "object",
+              "required": [
+                "href"
+              ],
+              "properties": {
+                "href": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`
+
+		t.Log("Hurl file contents:", contents)
+
+		var err error
+		oai, err = openapi.Parse("json", []byte(oaiContents))
+		require.NoError(t, err)
+
+		lines := strings.Split(contents, "\n")
+		state.SetLines(lines)
+		state.SetHfFromLines(lines)
+		completions, err := completion(&glsp.Context{}, &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				Position: protocol.Position{
+					Line:      2,
+					Character: 1,
+				},
+			}})
+
+		require.NoError(t, err)
+		assert.IsType(t, completions, []protocol.CompletionItem{})
+		_, ok := completions.([]protocol.CompletionItem)
+		assert.True(t, ok)
+
+		runDiagnostics()
+	})
 }

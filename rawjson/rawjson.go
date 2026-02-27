@@ -4,6 +4,7 @@
 package rawjson
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"slices"
@@ -115,7 +116,17 @@ type Pos struct {
 	Col  int
 }
 
-func PathToRange(lines []string, path []string) Range {
+// PathToRange transforms a path into the range over a set of lines
+func PathToRange(lines []string, path []string) (Range, error) {
+	if !json.Valid([]byte(strings.Join(lines, "\n"))) {
+		return Range{}, fmt.Errorf("invalid JSON provided to PathToRange")
+	}
+
+	return pathToRange(lines, path)
+}
+
+func pathToRange(lines []string, path []string) (Range, error) {
+
 	lenLines := len(lines)
 	lastCol := 0
 	isInArr := false
@@ -139,7 +150,7 @@ func PathToRange(lines []string, path []string) Range {
 				Line: lenLines - 1,
 				Col:  lastCol,
 			},
-		}
+		}, nil
 	}
 
 	nextPropertyName := path[0]
@@ -147,6 +158,16 @@ func PathToRange(lines []string, path []string) Range {
 	// Wrapped in function to take advantage of early return
 	getPathStart := func() Pos {
 		pathStart := Pos{}
+
+		if nextPropertyName == "" {
+			for i, line := range lines {
+				j := strings.Index(line, `""`)
+				return Pos{
+					Col:  j,
+					Line: i,
+				}
+			}
+		}
 
 		for i, line := range lines {
 			pPointer := 0
@@ -226,6 +247,9 @@ func PathToRange(lines []string, path []string) Range {
 		openCount := 0
 		entityOpener := '{'
 		entityCloser := '}'
+		insideString := false
+		// use lastChar char for identifying escape chars
+		escapeNext := false
 
 		for i, line := range lines {
 			if i < pathStart.Line {
@@ -233,7 +257,18 @@ func PathToRange(lines []string, path []string) Range {
 			}
 
 			for j, char := range line {
+				if char == '"' && !escapeNext {
+					insideString = !insideString
+				}
+
 				if !started && j < pathStart.Col {
+					escapeNext = char == '\\' && !escapeNext
+					continue
+				}
+
+				// We should ignore anything inside a string
+				if insideString {
+					escapeNext = char == '\\' && !escapeNext
 					continue
 				}
 
@@ -258,8 +293,11 @@ func PathToRange(lines []string, path []string) Range {
 				if char == entityCloser && openCount == 0 {
 					pathEnd.Line = i
 					pathEnd.Col = j
+
 					return pathEnd
 				}
+
+				escapeNext = char == '\\' && !escapeNext
 			}
 		}
 
@@ -267,14 +305,32 @@ func PathToRange(lines []string, path []string) Range {
 	}()
 
 	if len(path) == 1 {
-		return Range{pathStart, pathEnd}
+		return Range{pathStart, pathEnd}, nil
 	}
 
 	lines[pathEnd.Line] = lines[pathEnd.Line][:pathEnd.Col+1]
+	if pathStart.Col > len(lines[pathStart.Line]) {
+		return Range{pathStart, pathEnd}, fmt.Errorf(
+			"logic error: the program could not read the contents past %v,%v",
+			pathStart, pathEnd,
+		)
+	}
+
 	lines[pathStart.Line] = lines[pathStart.Line][pathStart.Col:]
+
+	if pathStart.Line > pathEnd.Line+1 {
+		return Range{pathStart, pathEnd}, fmt.Errorf(
+			"logic error: the program could not read the contents past %v,%v",
+			pathStart, pathEnd,
+		)
+	}
+
 	lines = lines[pathStart.Line : pathEnd.Line+1]
 
-	innerPathRange := PathToRange(lines, path[1:])
+	innerPathRange, err := pathToRange(lines, path[1:])
+	if err != nil {
+		return Range{pathStart, pathEnd}, err
+	}
 	startCol := innerPathRange.Start.Col
 	endCol := innerPathRange.End.Col
 
@@ -298,7 +354,7 @@ func PathToRange(lines []string, path []string) Range {
 			Line: pathStart.Line + innerPathRange.End.Line,
 			Col:  endCol,
 		},
-	}
+	}, nil
 }
 
 // Accepts lines, line, and col and returns true if adding a property at that
@@ -306,6 +362,11 @@ func PathToRange(lines []string, path []string) Range {
 // It returns true if there are no characters between this position and the first
 // '}' character other than whitespace.
 func IsOnLastProp(lines []string, line, col int) bool {
+	if line < 0 || col < 0 {
+		// Impossible case if client is correctly implemented
+		return false
+	}
+
 	for i := line; i < len(lines); i++ {
 		for j := col; j < len(lines[i]); j++ {
 			if unicode.IsSpace(rune(lines[i][j])) {
