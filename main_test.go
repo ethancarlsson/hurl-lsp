@@ -129,7 +129,7 @@ func TestCompletion(t *testing.T) {
 				// Don't test the captured variables
 				continue
 			}
-			_, ok := oai.Paths[item.Label]
+			_, ok := state.OAI().Paths[item.Label]
 			expect.Equals(t, true, ok)
 		}
 	})
@@ -602,7 +602,9 @@ func TestProperties(t *testing.T) {
 		t.Log("Hurl file contents:", contents)
 
 		var err error
-		oai, err = openapi.Parse("json", []byte(oaiContents))
+		oai, err := openapi.Parse("json", []byte(oaiContents))
+		state.SetOAI(&oai)
+
 		require.NoError(t, err)
 
 		lines := strings.Split(contents, "\n")

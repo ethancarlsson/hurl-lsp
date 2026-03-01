@@ -7,12 +7,14 @@ import (
 	"time"
 
 	"github.com/ethancarlsson/hurl-lsp/pkg/hurlfile"
+	"github.com/ethancarlsson/hurl-lsp/pkg/openapi"
 )
 
 var (
 	updater func() error       = nil
 	lines   []string           = []string{}
 	hf      *hurlfile.HurlFile = &hurlfile.HurlFile{}
+	oai     *openapi.OAI       = &openapi.OAI{}
 )
 
 func Lines() []string {
@@ -58,4 +60,14 @@ func ResetHf(after time.Duration, then func(hf *hurlfile.HurlFile)) {
 
 func Hf() *hurlfile.HurlFile {
 	return hf
+}
+
+func SetOAI(o *openapi.OAI) *openapi.OAI {
+	oai = o
+
+	return oai
+}
+
+func OAI() *openapi.OAI {
+	return oai
 }
