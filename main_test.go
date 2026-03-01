@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethancarlsson/hurl-lsp/expect"
-	"github.com/ethancarlsson/hurl-lsp/openapi"
-	"github.com/ethancarlsson/hurl-lsp/state"
+	"github.com/ethancarlsson/hurl-lsp/pkg/expect"
+	"github.com/ethancarlsson/hurl-lsp/pkg/openapi"
+	"github.com/ethancarlsson/hurl-lsp/pkg/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tliron/glsp"

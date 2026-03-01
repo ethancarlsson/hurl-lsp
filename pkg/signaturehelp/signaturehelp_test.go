@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ethancarlsson/hurl-lsp/expect"
-	"github.com/ethancarlsson/hurl-lsp/signaturehelp"
+	"github.com/ethancarlsson/hurl-lsp/pkg/expect"
+	"github.com/ethancarlsson/hurl-lsp/pkg/signaturehelp"
 )
 
 func TestLines(t *testing.T) {

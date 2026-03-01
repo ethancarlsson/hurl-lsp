@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethancarlsson/hurl-lsp/expect"
-	"github.com/ethancarlsson/hurl-lsp/openapi"
+	"github.com/ethancarlsson/hurl-lsp/pkg/expect"
+	"github.com/ethancarlsson/hurl-lsp/pkg/openapi"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,7 +25,7 @@ func TestParse(t *testing.T) {
 		}),
 	}
 	t.Run("yaml", func(t *testing.T) {
-		contents, err := os.ReadFile("../fixtures/petstore.yaml")
+		contents, err := os.ReadFile("../../fixtures/petstore.yaml")
 		expect.NoErr(t, err)
 
 		oai, err := openapi.Parse("yaml", contents)
@@ -454,7 +454,7 @@ func TestGetOp(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("../fixtures/petstore.yaml testing the correctness of %s %s", tt.method, tt.path), func(t *testing.T) {
-			contents, err := os.ReadFile("../fixtures/petstore.yaml")
+			contents, err := os.ReadFile("../../fixtures/petstore.yaml")
 			expect.NoErr(t, err)
 
 			oai, err := openapi.Parse("yaml", contents)

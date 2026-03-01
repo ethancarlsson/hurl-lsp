@@ -4,13 +4,13 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/ethancarlsson/hurl-lsp/expect"
-	"github.com/ethancarlsson/hurl-lsp/hurlfile"
+	"github.com/ethancarlsson/hurl-lsp/pkg/expect"
+	"github.com/ethancarlsson/hurl-lsp/pkg/hurlfile"
 )
 
 func TestParse(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
-		lines, err := hurlfile.ParseLines("file://../fixtures/test.hurl")
+		lines, err := hurlfile.ParseLines("file://../../fixtures/test.hurl")
 		expect.NoErr(t, err)
 
 		hf, err := hurlfile.Parse(lines)
@@ -69,7 +69,7 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("partial request", func(t *testing.T) {
-		lines, err := hurlfile.ParseLines("file://../fixtures/test_partial_req.hurl")
+		lines, err := hurlfile.ParseLines("file://../../fixtures/test_partial_req.hurl")
 		expect.NoErr(t, err)
 
 		hf, err := hurlfile.Parse(lines)
@@ -124,7 +124,7 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("file doesn't exist", func(t *testing.T) {
-		_, err := hurlfile.ParseLines("file://../fixtures/notexists.hurl")
+		_, err := hurlfile.ParseLines("file://../../fixtures/notexists.hurl")
 		expect.Err(t, err)
 		expect.ErrContains(t, "couldn't open file", err)
 	})

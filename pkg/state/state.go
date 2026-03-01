@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethancarlsson/hurl-lsp/hurlfile"
+	"github.com/ethancarlsson/hurl-lsp/pkg/hurlfile"
 )
 
 var (

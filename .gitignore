@@ -1,4 +1,4 @@
 vendor
 hurl-lsp
 .hurl-ls.json
-rawjson/TestData
+pkg/rawjson/testdata
