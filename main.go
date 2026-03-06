@@ -109,6 +109,7 @@ func documentDidSave(context *glsp.Context, params *protocol.DidSaveTextDocument
 
 func initialize(context *glsp.Context, params *protocol.InitializeParams) (any, error) {
 	capabilities := handler.CreateServerCapabilities()
+	capabilities.CompletionProvider.TriggerCharacters = []string{`"`}
 
 	return protocol.InitializeResult{
 		Capabilities: capabilities,
