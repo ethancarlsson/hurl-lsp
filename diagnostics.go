@@ -103,24 +103,21 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 		return diagnostics
 	}
 
-	missingProps := make([][]string, 0, len(schema.Required.OrEmpty()))
-
-	missingProps = append(missingProps, collectMissingProps(
-		missingProps, []string{},
+	schemaDiagnostics := openapi.DiagnoseAgainstSchema(
 		alreadyProvidedProps, schema,
-	)...)
+	)
 
-	for _, propPath := range missingProps {
-		if len(propPath) == 0 {
+	for _, diagnostic := range schemaDiagnostics {
+		if len(diagnostic.Path) == 0 {
 			continue
 		}
 		// path without the last element
-		objPath := propPath[:len(propPath)-1]
+		objPath := diagnostic.Path[:len(diagnostic.Path)-1]
 
 		pathRange, err := rawjson.PathToRange(bodyLines, objPath)
-		var additionalPathErr string
+		additionalPathErr := ""
 		if err != nil {
-			additionalPathErr = fmt.Sprintf(" could not read whole JSON: %s", err.Error())
+			additionalPathErr = fmt.Sprintf(". [note] could not read whole JSON: %s", err.Error())
 		}
 
 		diagnostics = append(diagnostics, protocol.Diagnostic{
@@ -134,7 +131,7 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 					Character: protocol.UInteger(pathRange.End.Col),
 				},
 			},
-			Message:  fmt.Sprintf(`Missing required property "%s"%s`, strings.Join(propPath, "/"), additionalPathErr),
+			Message:  fmt.Sprintf(`%s%s`, diagnostic.Error(), additionalPathErr),
 			Source:   &source,
 			Severity: &errorErr,
 		})
@@ -151,13 +148,15 @@ func collectMissingProps(missingProps [][]string, path []string, provided map[st
 		}
 	}
 
+	// collect for objects
 	for name, prop := range schema.Properties.OrEmpty() {
-		if prop.OrEmpty().Properties.Or(nil) == nil {
+		p := prop.OrEmpty()
+		if p.Properties.Or(nil) == nil {
 			continue
 		}
 
-		propSchema := prop
 		provided, ok := provided[name]
+
 		if !ok {
 			continue
 		}
@@ -168,9 +167,10 @@ func collectMissingProps(missingProps [][]string, path []string, provided map[st
 		}
 
 		newPath := append(path, name)
-		missingProps = collectMissingProps(missingProps, newPath, obj, propSchema.OrEmpty())
+		missingProps = collectMissingProps(missingProps, newPath, obj, p)
 	}
 
+	// collect for additionalProperties objects
 	for name, prop := range schema.Properties.OrEmpty() {
 		additionalProperties := prop.OrEmpty().AdditionalProperties.Or(nil)
 		if additionalProperties == nil {
@@ -193,6 +193,7 @@ func collectMissingProps(missingProps [][]string, path []string, provided map[st
 		}
 	}
 
+	// collect for arrays
 	for name, prop := range schema.Properties.OrEmpty() {
 		propItems := prop.OrEmpty().Items.Or(nil)
 		if propItems == nil {
