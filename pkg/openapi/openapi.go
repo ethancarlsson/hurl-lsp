@@ -211,6 +211,7 @@ type OpParam struct {
 
 type Schema struct {
 	Type                 MaybeParsed[string]                         `json:"type"`
+	Nullable             MaybeParsed[bool]                           `json:"nullable"`
 	Properties           MaybeParsed[map[string]MaybeParsed[Schema]] `json:"properties"`
 	Required             MaybeParsed[[]string]                       `json:"required"`
 	Ref                  MaybeParsed[string]                         `json:"$ref"`

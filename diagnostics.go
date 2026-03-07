@@ -112,7 +112,7 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 			continue
 		}
 		// path without the last element
-		objPath := diagnostic.Path[:len(diagnostic.Path)-1]
+		objPath := diagnostic.RangePath()
 
 		pathRange, err := rawjson.PathToRange(bodyLines, objPath)
 		additionalPathErr := ""
@@ -128,7 +128,7 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 				},
 				End: protocol.Position{
 					Line:      protocol.UInteger(req.Body.Range.StartLine + pathRange.End.Line),
-					Character: protocol.UInteger(pathRange.End.Col),
+					Character: protocol.UInteger(pathRange.End.Col) + 1,
 				},
 			},
 			Message:  fmt.Sprintf(`%s%s`, diagnostic.Error(), additionalPathErr),

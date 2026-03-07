@@ -116,7 +116,9 @@ type Pos struct {
 	Col  int
 }
 
-// PathToRange transforms a path into the range over a set of lines
+// PathToRange transforms a path into the range over a set of lines.
+// First line indicates the error should only give the range of the first
+// line it finds (needed when )
 func PathToRange(lines []string, path []string) (Range, error) {
 	if !json.Valid([]byte(strings.Join(lines, "\n"))) {
 		return Range{}, fmt.Errorf("invalid JSON provided to PathToRange")
@@ -126,7 +128,6 @@ func PathToRange(lines []string, path []string) (Range, error) {
 }
 
 func pathToRange(lines []string, path []string) (Range, error) {
-
 	lenLines := len(lines)
 	lastCol := 0
 	isInArr := false
@@ -245,6 +246,7 @@ func pathToRange(lines []string, path []string) (Range, error) {
 		pathEnd := Pos{}
 		started := false
 		openCount := 0
+		closeCount := 0
 		entityOpener := '{'
 		entityCloser := '}'
 		insideString := false
@@ -287,10 +289,20 @@ func pathToRange(lines []string, path []string) (Range, error) {
 				}
 
 				if char == entityCloser {
-					openCount -= 1
+					closeCount += 1
 				}
 
-				if char == entityCloser && openCount == 0 {
+				// If it hasn't been opened and we reached the
+				// end of the line, a comma, or a closing char
+				// it must be a scalar.
+				if openCount == 0 && (j+1 == len(line) || char == ',' || closeCount > 0) {
+					pathEnd.Line = i
+					pathEnd.Col = j
+
+					return pathEnd
+				}
+
+				if (char == entityCloser) && openCount-closeCount == 0 {
 					pathEnd.Line = i
 					pathEnd.Col = j
 

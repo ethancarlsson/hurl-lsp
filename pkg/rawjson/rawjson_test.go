@@ -446,6 +446,19 @@ func TestPathToRange(t *testing.T) {
 				End:   rawjson.Pos{6, 40},
 			},
 		},
+		{
+			name: "scalar value",
+			jsonLines: `{
+				"test": {
+					"id": 123
+				}
+			}`,
+			path: []string{"test", "id"},
+			expected: rawjson.Range{
+				Start: rawjson.Pos{2, 5},
+				End:   rawjson.Pos{2, 13},
+			},
+		},
 	}
 
 	for _, tt := range tests {

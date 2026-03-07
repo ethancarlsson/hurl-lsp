@@ -1,7 +1,13 @@
 package rawjson
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"pgregory.net/rapid"
 )
 
 type nestedStruct struct {
@@ -36,72 +42,77 @@ type structOfEverything struct {
 
 func TestPathToRange(t *testing.T) {
 
-	// rapid.Check(t, func(t *rapid.T) {
-	// 	var (
-	// 		obj = rapid.Make[structOfEverything]().Draw(t, "obj")
-	// 	)
-	//
-	// 	// var allPaths = [][]string{
-	// 	// 	// Top-level
-	// 	// 	{"int_map"},
-	// 	// 	{"str_map"},
-	// 	// 	{"map_map"},
-	// 	// 	{"arr_map"},
-	// 	// 	{"bool_map"},
-	// 	// 	{"str"},
-	// 	// 	{"int"},
-	// 	// 	{"float"},
-	// 	// 	{"bool"},
-	// 	// 	{"int_slice"},
-	// 	// 	{"str_slice"},
-	// 	// 	{"fixed_array"},
-	// 	// 	{"slice_of_maps"},
-	// 	// 	{"map_of_slices"},
-	// 	// 	{"str_ptr"},
-	// 	// 	{"int_ptr"},
-	// 	// 	{"struct_ptr"},
-	// 	// 	{"nested"},
-	// 	// 	{"nested_slice"},
-	// 	// 	{"nested_map"},
-	// 	// 	{"deep"},
-	// 	// 	{"map_of_struct_maps"},
-	// 	// 	{"slice_of_deep_maps"},
-	// 	//
-	// 	// 	// struct_ptr (nestedStruct)
-	// 	// 	{"struct_ptr", "id"},
-	// 	// 	{"struct_ptr", "tags"},
-	// 	// 	{"struct_ptr", "attrs"},
-	// 	//
-	// 	// 	// nested (nestedStruct)
-	// 	// 	{"nested", "id"},
-	// 	// 	{"nested", "tags"},
-	// 	// 	{"nested", "attrs"},
-	// 	//
-	// 	// 	// deep (direct fields)
-	// 	// 	{"deep", "matrix"},
-	// 	// 	{"deep", "lookup"},
-	// 	// 	{"deep", "optional"},
-	// 	//
-	// 	// 	// deep.optional (nestedStruct)
-	// 	// 	{"deep", "optional", "id"},
-	// 	// 	{"deep", "optional", "tags"},
-	// 	// 	{"deep", "optional", "attrs"},
-	// 	// }
-	//
-	// 	objJSON, err := json.Marshal(obj)
-	// 	require.NoError(t, err)
-	// 	objJSONStr := string(objJSON)
-	// 	t.Log("Provided JSON", objJSONStr)
-	// 	asLines := strings.Split(objJSONStr, "\n")
-	//
-	// 	_, err = pathToRange(asLines, []string{"deep", "optional", "tags"})
-	// 	assert.NoError(t, err)
-	//
-	// 	objJSON, err = json.MarshalIndent(obj, "	", "	")
-	// 	require.NoError(t, err)
-	// 	objJSONStr = string(objJSON)
-	// 	t.Log("Provided JSON", objJSONStr)
-	// 	_, err = pathToRange(asLines, []string{"deep", "optional", "tags"})
-	// 	assert.NoError(t, err)
-	// })
+	rapid.Check(t, func(t *rapid.T) {
+		var (
+			obj = rapid.Make[structOfEverything]().Draw(t, "obj")
+		)
+
+		var allPaths = [][]string{
+			// Top-level
+			{"int_map"},
+			{"str_map"},
+			{"map_map"},
+			{"arr_map"},
+			{"bool_map"},
+			{"str"},
+			{"int"},
+			{"float"},
+			{"bool"},
+			{"int_slice"},
+			{"str_slice"},
+			{"fixed_array"},
+			{"slice_of_maps"},
+			{"map_of_slices"},
+			{"str_ptr"},
+			{"int_ptr"},
+			{"struct_ptr"},
+			{"nested"},
+			{"nested_slice"},
+			{"nested_map"},
+			{"deep"},
+			{"map_of_struct_maps"},
+			{"slice_of_deep_maps"},
+
+			// struct_ptr (nestedStruct)
+			{"struct_ptr", "id"},
+			{"struct_ptr", "tags"},
+			{"struct_ptr", "attrs"},
+
+			// nested (nestedStruct)
+			{"nested", "id"},
+			{"nested", "tags"},
+			{"nested", "attrs"},
+
+			// deep (direct fields)
+			{"deep", "matrix"},
+			{"deep", "lookup"},
+			{"deep", "optional"},
+
+			// deep.optional (nestedStruct)
+			{"deep", "optional", "id"},
+			{"deep", "optional", "tags"},
+			{"deep", "optional", "attrs"},
+		}
+
+		for _, path := range allPaths {
+			t.Log(path)
+			objJSON, err := json.Marshal(obj)
+			require.NoError(t, err)
+			objJSONStr := string(objJSON)
+			// t.Log("Provided JSON", objJSONStr)
+			asLines := strings.Split(objJSONStr, "\n")
+
+			rnge, err := pathToRange(asLines, path)
+			assert.NoError(t, err)
+			assert.LessOrEqual(t, (rnge.Start.Col+1)*(rnge.Start.Line+1), (rnge.End.Line+1)*(rnge.End.Col+1), "end %v comes before start %v", rnge.End, rnge.Start)
+
+			objJSON, err = json.MarshalIndent(obj, "	", "	")
+			require.NoError(t, err)
+			objJSONStr = string(objJSON)
+			// t.Log("Provided JSON", objJSONStr)
+			rnge, err = pathToRange(asLines, path)
+			assert.NoError(t, err)
+			assert.LessOrEqual(t, (rnge.Start.Col+1)*(rnge.Start.Line+1), (rnge.End.Line+1)*(rnge.End.Col+1), "end %v comes before start %v", rnge.End, rnge.Start)
+		}
+	})
 }

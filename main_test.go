@@ -362,7 +362,7 @@ func TestDiagnostics(t *testing.T) {
 						},
 						End: protocol.Position{
 							Line:      13,
-							Character: 0,
+							Character: 1,
 						},
 					},
 					Message: `Missing required property "name"`,
@@ -375,7 +375,7 @@ func TestDiagnostics(t *testing.T) {
 						},
 						End: protocol.Position{
 							Line:      13,
-							Character: 0,
+							Character: 1,
 						},
 					},
 					Message: `Missing required property "photoUrls"`,
@@ -393,7 +393,7 @@ func TestDiagnostics(t *testing.T) {
 						},
 						End: protocol.Position{
 							Line:      18,
-							Character: 0,
+							Character: 1,
 						},
 					},
 					Message: `Missing required property "photoUrls"`,
@@ -406,7 +406,7 @@ func TestDiagnostics(t *testing.T) {
 						},
 						End: protocol.Position{
 							Line:      16,
-							Character: 2,
+							Character: 3,
 						},
 					},
 					Message: `Missing required property "siblings/id123/href"`,
@@ -419,7 +419,7 @@ func TestDiagnostics(t *testing.T) {
 						},
 						End: protocol.Position{
 							Line:      11,
-							Character: 2,
+							Character: 3,
 						},
 					},
 					Message: `Missing required property "tags/0/id"`,
