@@ -187,7 +187,7 @@ func propTypeDiagnostics(diagnostics []Diagnostic, path []string, providedVal an
 			})
 		}
 	case float64:
-		if !slices.Contains(propTypes, "number") {
+		if !(slices.Contains(propTypes, "number") || (slices.Contains(propTypes, "integer") && float64(int(v)) == v)) {
 			diagnostics = append(diagnostics, Diagnostic{
 				Diagnostic: fmt.Sprintf("Expected %s got number", strings.Join(propTypes, "|")),
 				Path:       path,
