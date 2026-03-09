@@ -7,12 +7,12 @@ It can optionally integrate with your OpenAPI specifications to provide spec-awa
 
 ## Installation
 
-### Go toolchain
-
+At the moment you can only install this by cloning and building yourself.
 ```bash
-go install github.com/ethancarlsson/hurl-lsp@latest
+git clone git@github.com:ethancarlsson/hurl-lsp.git
+cd hurl-lsp
+go install
 ```
-
 ## Usage
 
 Configure your LSP client to use the `hurl-lsp` binary.
