@@ -201,9 +201,9 @@ func propTypeDiagnostics(diagnostics []Diagnostic, path []string, providedVal an
 			})
 		}
 	case bool:
-		if !slices.Contains(propTypes, "bool") {
+		if !slices.Contains(propTypes, "boolean") {
 			diagnostics = append(diagnostics, Diagnostic{
-				Diagnostic: fmt.Sprintf("Expected %s got bool", strings.Join(propTypes, "|")),
+				Diagnostic: fmt.Sprintf("Expected %s got boolean", strings.Join(propTypes, "|")),
 				Path:       path,
 			})
 		}
