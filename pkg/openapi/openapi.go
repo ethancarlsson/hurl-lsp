@@ -247,8 +247,8 @@ func (s Schema) Combined(existingProps map[string]json.RawMessage) Schema {
 		}
 
 		if len(schema.Properties.OrEmpty()) > 0 {
-			props := s.Properties.OrEmpty()
-			maps.Copy(props, schema.Properties.OrEmpty())
+			props := s.Properties.Or(map[string]MaybeParsed[Schema]{})
+			maps.Copy(props, schema.Properties.Or(map[string]MaybeParsed[Schema]{}))
 			s.Properties.set(props)
 		}
 	}
@@ -259,8 +259,8 @@ func (s Schema) Combined(existingProps map[string]json.RawMessage) Schema {
 		}
 
 		if len(schema.Properties.OrEmpty()) > 0 {
-			props := s.Properties.OrEmpty()
-			maps.Copy(props, schema.Properties.OrEmpty())
+			props := s.Properties.Or(map[string]MaybeParsed[Schema]{})
+			maps.Copy(props, schema.Properties.Or(map[string]MaybeParsed[Schema]{}))
 			s.Properties.set(props)
 		}
 	}
@@ -296,8 +296,8 @@ func (s Schema) Combined(existingProps map[string]json.RawMessage) Schema {
 		}
 
 		if len(schema.Properties.OrEmpty()) > 0 {
-			props := s.Properties.OrEmpty()
-			maps.Copy(props, schema.Properties.OrEmpty())
+			props := s.Properties.Or(map[string]MaybeParsed[Schema]{})
+			maps.Copy(props, schema.Properties.Or(map[string]MaybeParsed[Schema]{}))
 			s.Properties.set(props)
 		}
 	}
@@ -318,17 +318,37 @@ func (s Schema) ToString(indent int) string {
 		return res
 	}
 
-	props := s.Combined(make(map[string]json.RawMessage)).Properties.OrEmpty()
+	if len(s.AnyOf.OrEmpty()) > 0 {
+		res += "anyOf"
+		for _, schema := range s.AnyOf.OrEmpty() {
+			res += "\n" + strings.Repeat(" ", indent+indentIncrement) + "| " + schema.ToString(indent+indentIncrement)
+		}
+
+		return res
+	}
+
+	if len(s.AllOf.OrEmpty()) > 0 {
+		res += "allOf"
+		for _, schema := range s.AllOf.OrEmpty() {
+			res += "\n" + strings.Repeat(" ", indent+indentIncrement) + "| " + schema.ToString(indent+indentIncrement)
+		}
+
+		return res
+	}
+
+	props := s.Combined(map[string]json.RawMessage{}).Properties.OrEmpty()
 	items := s.Items.OrEmpty()
 	if s.Type.OrEmpty() == "array" && items != nil {
-		res += "<" + items.Type.OrEmpty() + ">"
-		props = items.Properties.OrEmpty()
+		i := items.Combined(map[string]json.RawMessage{})
+		res += "<" + i.Type.OrEmpty() + ">"
+		props = i.Properties.OrEmpty()
 	}
 
 	additionalProps := s.AdditionalProperties.OrEmpty()
 	if additionalProps != nil {
+		ap := additionalProps.Combined(map[string]json.RawMessage{})
 		res += "<additionalProperties>"
-		props = additionalProps.Properties.OrEmpty()
+		props = ap.Properties.OrEmpty()
 	}
 
 	for k, p := range props {
