@@ -240,29 +240,27 @@ func (s Schema) SchemaType() string {
 	return t
 }
 
+func (s *Schema) mergeSchemas(other Schema) {
+	if t := other.Type.OrEmpty(); t != "" {
+		s.Type.set(t)
+	}
+
+	if len(other.Properties.OrEmpty()) > 0 {
+		props := s.Properties.Or(map[string]MaybeParsed[Schema]{})
+		maps.Copy(props, other.Properties.Or(map[string]MaybeParsed[Schema]{}))
+		s.Properties.set(props)
+	}
+
+	s.Required.set(append(other.Required.OrEmpty(), s.Required.OrEmpty()...))
+}
+
 func (s Schema) Combined(existingProps map[string]json.RawMessage) Schema {
 	for _, schema := range s.AnyOf.OrEmpty() {
-		if t := schema.Type.OrEmpty(); t != "" {
-			s.Type.set(t)
-		}
-
-		if len(schema.Properties.OrEmpty()) > 0 {
-			props := s.Properties.Or(map[string]MaybeParsed[Schema]{})
-			maps.Copy(props, schema.Properties.Or(map[string]MaybeParsed[Schema]{}))
-			s.Properties.set(props)
-		}
+		s.mergeSchemas(schema)
 	}
 
 	for _, schema := range s.AllOf.OrEmpty() {
-		if t := schema.Type.OrEmpty(); t != "" {
-			s.Type.set(t)
-		}
-
-		if len(schema.Properties.OrEmpty()) > 0 {
-			props := s.Properties.Or(map[string]MaybeParsed[Schema]{})
-			maps.Copy(props, schema.Properties.Or(map[string]MaybeParsed[Schema]{}))
-			s.Properties.set(props)
-		}
+		s.mergeSchemas(schema)
 	}
 
 	if len(s.OneOf.OrEmpty()) == 0 {
@@ -291,15 +289,7 @@ func (s Schema) Combined(existingProps map[string]json.RawMessage) Schema {
 	}
 
 	for _, schema := range oneOfsToMerge {
-		if t := schema.Type.OrEmpty(); t != "" {
-			s.Type.set(t)
-		}
-
-		if len(schema.Properties.OrEmpty()) > 0 {
-			props := s.Properties.Or(map[string]MaybeParsed[Schema]{})
-			maps.Copy(props, schema.Properties.Or(map[string]MaybeParsed[Schema]{}))
-			s.Properties.set(props)
-		}
+		s.mergeSchemas(schema)
 	}
 
 	return s
@@ -308,10 +298,11 @@ func (s Schema) Combined(existingProps map[string]json.RawMessage) Schema {
 func (s Schema) ToString(indent int) string {
 	res := s.Type.OrEmpty()
 	const indentIncrement = 2
+	schema := s.Combined(map[string]json.RawMessage{})
 
 	if len(s.OneOf.OrEmpty()) > 0 {
 		res += "oneOf"
-		for _, schema := range s.OneOf.OrEmpty() {
+		for _, schema := range schema.OneOf.OrEmpty() {
 			res += "\n" + strings.Repeat(" ", indent+indentIncrement) + "| " + schema.ToString(indent+indentIncrement)
 		}
 
@@ -372,18 +363,6 @@ func (o Op) NotDocumented() bool {
 
 func (o OAI) resolveSchemaRef(schema Schema) Schema {
 	schema = o.resolveSchemaCombiners(schema)
-	items := schema.Items.OrEmpty()
-	if items != nil {
-		schemaItems := o.resolveSchemaRef(*items)
-		schema.Items.set(&schemaItems)
-	}
-
-	additionalProps := schema.AdditionalProperties.OrEmpty()
-
-	if additionalProps != nil {
-		schemaAdditionalProperties := o.resolveSchemaRef(*additionalProps)
-		schema.AdditionalProperties.set(&schemaAdditionalProperties)
-	}
 
 	if schema.Ref.OrEmpty() == "" {
 		return schema
@@ -420,15 +399,7 @@ func (o OAI) resolveSchemaRef(schema Schema) Schema {
 	}
 
 	refedSchema = o.resolveSchemaCombiners(refedSchema)
-	if len(refedSchema.AllOf.Or([]Schema{})) > 0 {
-		schema.AllOf.set(refedSchema.AllOf.Or([]Schema{}))
-	}
-	if len(refedSchema.OneOf.Or([]Schema{})) > 0 {
-		schema.OneOf.set(refedSchema.OneOf.Or([]Schema{}))
-	}
-	if len(refedSchema.AnyOf.Or([]Schema{})) > 0 {
-		schema.AnyOf.set(refedSchema.AnyOf.Or([]Schema{}))
-	}
+	schema.mergeCombiners(refedSchema)
 
 	props := schema.Properties.Or(map[string]MaybeParsed[Schema]{})
 	maps.Copy(props, refedSchema.Properties.Or(map[string]MaybeParsed[Schema]{}))
@@ -440,7 +411,31 @@ func (o OAI) resolveSchemaRef(schema Schema) Schema {
 
 	schema.Properties.set(props)
 
+	refedItems := refedSchema.Items.Or(nil)
+	if schema.Items.Or(nil) == nil && refedItems != nil {
+		refedItems := o.resolveSchemaRef(*refedItems)
+		schema.Items.set(&refedItems)
+	}
+
+	refedAdditionalProperties := refedSchema.AdditionalProperties.Or(nil)
+	if schema.AdditionalProperties.Or(nil) == nil && refedAdditionalProperties != nil {
+		refedAdditionalProperties := o.resolveSchemaRef(*refedAdditionalProperties)
+		schema.AdditionalProperties.set(&refedAdditionalProperties)
+	}
+
 	return schema
+}
+
+func (s *Schema) mergeCombiners(other Schema) {
+	if len(other.AllOf.Or([]Schema{})) > 0 {
+		s.AllOf.set(other.AllOf.Or([]Schema{}))
+	}
+	if len(other.OneOf.Or([]Schema{})) > 0 {
+		s.OneOf.set(other.OneOf.Or([]Schema{}))
+	}
+	if len(other.AnyOf.Or([]Schema{})) > 0 {
+		s.AnyOf.set(other.AnyOf.Or([]Schema{}))
+	}
 }
 
 func (o OAI) resolveSchemaCombiners(schema Schema) Schema {

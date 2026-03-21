@@ -122,7 +122,7 @@ func addBodyCompletions(hf *hurlfile.HurlFile, items []protocol.CompletionItem, 
 
 		alreadyProvidedProps = innerPropMap
 		if path.IsArr() {
-			innerSchemaItems := innerSchema.OrEmpty().Items.OrEmpty()
+			innerSchemaItems := innerSchema.Or(openapi.Schema{}).Items.Or(&openapi.Schema{})
 			currentSchema = *innerSchemaItems
 		} else {
 			currentSchema = innerSchema.OrEmpty()

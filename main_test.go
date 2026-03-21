@@ -452,7 +452,7 @@ func TestDiagnostics(t *testing.T) {
 			parseOpenapi()
 			parseDocument(tc.filePath)
 
-			expect.Equals(t, tc.expected, ignorePointers(runDiagnostics()))
+			assert.Equal(t, tc.expected, ignorePointers(runDiagnostics()))
 		})
 	}
 }

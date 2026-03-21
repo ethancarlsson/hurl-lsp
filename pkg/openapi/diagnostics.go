@@ -108,7 +108,7 @@ func collectSchemaDiagnostics(diagnostics []Diagnostic, path []string, provided 
 			}
 
 			diagnostics = propTypeDiagnostics(diagnostics, newPath, providedVal, *additionalProperties)
-			diagnostics = collectSchemaDiagnostics(diagnostics, newPath, obj, *additionalProperties)
+			diagnostics = collectSchemaDiagnostics(diagnostics, newPath, obj, additionalProperties.Combined(obj))
 		}
 	}
 
@@ -143,7 +143,9 @@ func collectSchemaDiagnostics(diagnostics []Diagnostic, path []string, provided 
 			if err := json.Unmarshal(item, &obj); err != nil {
 				continue
 			}
-			diagnostics = collectSchemaDiagnostics(diagnostics, newPath, obj, *propItems)
+
+			pItems := propItems.Combined(obj)
+			diagnostics = collectSchemaDiagnostics(diagnostics, newPath, obj, pItems)
 		}
 	}
 
