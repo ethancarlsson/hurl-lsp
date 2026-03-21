@@ -820,6 +820,13 @@ components:
           items:
             anyOf:
               - $ref: '#/components/schemas/Pet'
+        pets2:
+          type: object
+          additionalProperties:
+            oneOf:
+              - $ref: '#/components/schemas/Pet'
+        tags:
+          $ref: '#/components/schemas/Tags2'
       xml:
         name: user
     Tag:
@@ -841,6 +848,12 @@ components:
       items:
         allOf:
           - $ref: '#/components/schemas/Tag'
+    Tags2:
+      type: object
+      xml:
+        wrapped: true
+      additionalProperties:
+        $ref: '#/components/schemas/Tag'
     Pet:
       required:
         - name

@@ -8,5 +8,16 @@ POST {{host}}/user
 
 			"name": "Test"
 		}
-	]
+	],
+	"pets2": {
+		"test": {
+			
+			"name": "Test2"
+		}
+	},
+	"tags": {
+		"hello": {
+
+		}
+	}
 }

@@ -364,6 +364,18 @@ func (o Op) NotDocumented() bool {
 func (o OAI) resolveSchemaRef(schema Schema) Schema {
 	schema = o.resolveSchemaCombiners(schema)
 
+	if schema.Items.Or(nil) != nil {
+		schemaItems := schema.Items.Or(&Schema{})
+		sItems := o.resolveSchemaCombiners(*schemaItems)
+		schema.Items.set(&sItems)
+	}
+
+	if schema.AdditionalProperties.Or(nil) != nil {
+		schemaAddProps := schema.AdditionalProperties.Or(&Schema{})
+		sAddProps := o.resolveSchemaCombiners(*schemaAddProps)
+		schema.AdditionalProperties.set(&sAddProps)
+	}
+
 	if schema.Ref.OrEmpty() == "" {
 		return schema
 	}
@@ -403,6 +415,7 @@ func (o OAI) resolveSchemaRef(schema Schema) Schema {
 
 	props := schema.Properties.Or(map[string]MaybeParsed[Schema]{})
 	maps.Copy(props, refedSchema.Properties.Or(map[string]MaybeParsed[Schema]{}))
+
 	schema.Required.set(refedSchema.Required.Or([]string{}))
 
 	for k, prop := range props {

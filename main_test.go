@@ -274,7 +274,7 @@ func TestCompletion(t *testing.T) {
 
 		slices.Sort(itemNames)
 
-		expect.Equals(t, expectedPropertyNames, itemNames)
+		assert.Equal(t, expectedPropertyNames, itemNames)
 	})
 
 	t.Run("request body completion additionalProperties", func(t *testing.T) {
@@ -319,6 +319,171 @@ func TestCompletion(t *testing.T) {
 
 		items := is.([]protocol.CompletionItem)
 		expectedPropertyNames := []string{"href"}
+		itemNames := make([]string, 0, len(expectedPropertyNames))
+		for _, item := range items {
+			itemNames = append(itemNames, strings.Trim(item.Label, "\""))
+		}
+
+		slices.Sort(itemNames)
+
+		expect.Equals(t, expectedPropertyNames, itemNames)
+	})
+
+	t.Run("request body completion user pets", func(t *testing.T) {
+		conf.OpenapiDefPaths = []oaiPath{"./fixtures/petstore.yaml"}
+		params := &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{
+					URI: "./fixtures/test_user.hurl",
+				},
+				Position: protocol.Position{
+					Line:      8,
+					Character: 1,
+				},
+			},
+		}
+		// {
+		// 	"firstName": "John",
+		// 	"id": 123,
+		// 	"lastName": "Doe",
+		// 	"pets": [
+		// 		{
+		//			 <- HERE
+		// 			"name": "Test"
+		// 		}
+		// 	],
+		//	"pets2": {
+		//		"test": {
+		//
+		//			"name": "Test2"
+		//		}
+		//	}
+		// 	"tags": {
+		// 		"hello": {
+		//
+		// 		}
+		// 	}
+		// }
+
+		parseOpenapi()
+		parseDocument(params.TextDocument.URI)
+		runDiagnostics()
+
+		is, err := completion(&ctx, params)
+		expect.NoErr(t, err)
+
+		items := is.([]protocol.CompletionItem)
+		expectedPropertyNames := []string{"category", "id", "photoUrls", "siblings", "status", "tags"}
+		itemNames := make([]string, 0, len(expectedPropertyNames))
+		for _, item := range items {
+			itemNames = append(itemNames, strings.Trim(item.Label, "\""))
+		}
+
+		slices.Sort(itemNames)
+
+		expect.Equals(t, expectedPropertyNames, itemNames)
+	})
+
+	t.Run("request body completion user pets in pets additional properties", func(t *testing.T) {
+		conf.OpenapiDefPaths = []oaiPath{"./fixtures/petstore.yaml"}
+		params := &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{
+					URI: "./fixtures/test_user.hurl",
+				},
+				Position: protocol.Position{
+					Line:      14,
+					Character: 1,
+				},
+			},
+		}
+		// {
+		// 	"firstName": "John",
+		// 	"id": 123,
+		// 	"lastName": "Doe",
+		// 	"pets": [
+		// 		{
+		//
+		// 			"name": "Test"
+		// 		}
+		// 	],
+		//	"pets2": {
+		//		"test": {
+		//			 <- HERE
+		//			"name": "Test2"
+		//		}
+		//	}
+		// 	"tags": {
+		// 		"hello": {
+		//
+		// 		}
+		// 	}
+		// }
+
+		parseOpenapi()
+		parseDocument(params.TextDocument.URI)
+		runDiagnostics()
+
+		is, err := completion(&ctx, params)
+		expect.NoErr(t, err)
+
+		items := is.([]protocol.CompletionItem)
+		expectedPropertyNames := []string{"category", "id", "photoUrls", "siblings", "status", "tags"}
+		itemNames := make([]string, 0, len(expectedPropertyNames))
+		for _, item := range items {
+			itemNames = append(itemNames, strings.Trim(item.Label, "\""))
+		}
+
+		slices.Sort(itemNames)
+
+		expect.Equals(t, expectedPropertyNames, itemNames)
+	})
+
+	t.Run("request body completion user pets in tags additional properties", func(t *testing.T) {
+		conf.OpenapiDefPaths = []oaiPath{"./fixtures/petstore.yaml"}
+		params := &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{
+					URI: "./fixtures/test_user.hurl",
+				},
+				Position: protocol.Position{
+					Line:      20,
+					Character: 1,
+				},
+			},
+		}
+		// {
+		// 	"firstName": "John",
+		// 	"id": 123,
+		// 	"lastName": "Doe",
+		// 	"pets": [
+		// 		{
+		//
+		// 			"name": "Test"
+		// 		}
+		// 	],
+		//	"pets2": {
+		//		"test": {
+		//
+		//			"name": "Test2"
+		//		}
+		//	}
+		// 	"tags": {
+		// 		"hello": {
+		//			<- HERE
+		// 		}
+		// 	}
+		// }
+
+		parseOpenapi()
+		parseDocument(params.TextDocument.URI)
+		runDiagnostics()
+
+		is, err := completion(&ctx, params)
+		expect.NoErr(t, err)
+
+		items := is.([]protocol.CompletionItem)
+		expectedPropertyNames := []string{"id", "name"}
 		itemNames := make([]string, 0, len(expectedPropertyNames))
 		for _, item := range items {
 			itemNames = append(itemNames, strings.Trim(item.Label, "\""))
