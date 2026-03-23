@@ -4,7 +4,6 @@
 package rawjson
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"slices"
@@ -120,10 +119,6 @@ type Pos struct {
 // First line indicates the error should only give the range of the first
 // line it finds (needed when )
 func PathToRange(lines []string, path []string) (Range, error) {
-	if !json.Valid([]byte(strings.Join(lines, "\n"))) {
-		return Range{}, fmt.Errorf("invalid JSON provided to PathToRange")
-	}
-
 	return pathToRange(lines, path)
 }
 
@@ -421,16 +416,28 @@ func CleanTrailingCommas(jsonStr string) string {
 	return strings.Join(splitStr, "")
 }
 
-var reHurlVariable = regexp.MustCompile("{{\\S+}}")
+var ReHurlVariable = regexp.MustCompile("{{\\S+}}")
+var reReplacedVariable = regexp.MustCompile(`\[\[7+]]`)
 
-// Takes in a string and replaces all hurl variables with "{}" this makes it possible
-// to parse the string as JSON. "{}" is chosen because it will be valid JSON even
-// in scenarios where the variable is wrapped in a string, e.g. both of these will
-// be replaced in a way that can be parsed as json:
-// - "id": {{id}}	-> "id": {}
-// - "name": "{{name}}"	-> "name": "{}"
+func HasReplacedVariable(str string) bool {
+	return reReplacedVariable.Match([]byte(str))
+}
+
+// Takes in a string and replaces all hurl variables with `[[7]]` this makes it possible
+// to parse the string as JSON. `[[7]]` is chosen because it will be valid JSON even
+// in scenarios where the variable is wrapped in a string and it is unique enought
+// that it can be identified as a replaced value with few false positives. The
+// length of the new JSON value will match the replaced variable.
+// e.g.
+// - "id": {{id}}	-> "id": [[77]]
+// - "name": "{{name}}"	-> "name": [[7777]]
 func CleanVariables(str string) string {
-	return string(reHurlVariable.ReplaceAll([]byte(str), []byte("{}")))
+	for _, indxs := range ReHurlVariable.FindAllIndex([]byte(str), -1) {
+		placeholder := strings.Repeat("7", (indxs[1]-indxs[0])-4)
+		str = str[:indxs[0]] + `[[` + placeholder + `]]` + str[indxs[1]:]
+	}
+
+	return str
 }
 
 func OffsetToPos(lines []string, offset int64) Range {

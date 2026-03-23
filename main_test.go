@@ -609,6 +609,50 @@ func TestDiagnostics(t *testing.T) {
 				},
 			},
 		},
+		{
+			filePath: "./fixtures/test_user.hurl",
+			expected: []protocol.Diagnostic{
+				{
+					Range: protocol.Range{
+						Start: protocol.Position{
+							Line:      18,
+							Character: 2,
+						},
+						End: protocol.Position{
+							Line:      20,
+							Character: 3,
+						},
+					},
+					Message: `Missing required property "tags/hello/id"`,
+				},
+				{
+					Range: protocol.Range{
+						Start: protocol.Position{
+							Line:      12,
+							Character: 2,
+						},
+						End: protocol.Position{
+							Line:      15,
+							Character: 3,
+						},
+					},
+					Message: `Missing required property "pets2/test/photoUrls"`,
+				},
+				{
+					Range: protocol.Range{
+						Start: protocol.Position{
+							Line:      6,
+							Character: 2,
+						},
+						End: protocol.Position{
+							Line:      9,
+							Character: 3,
+						},
+					},
+					Message: `Missing required property "pets/0/photoUrls"`,
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -617,7 +661,16 @@ func TestDiagnostics(t *testing.T) {
 			parseOpenapi()
 			parseDocument(tc.filePath)
 
-			assert.Equal(t, tc.expected, ignorePointers(runDiagnostics()))
+			actual := ignorePointers(runDiagnostics())
+
+			slices.SortFunc(tc.expected, func(a protocol.Diagnostic, b protocol.Diagnostic) int {
+				return len(a.Message) - len(b.Message)
+			})
+			slices.SortFunc(actual, func(a protocol.Diagnostic, b protocol.Diagnostic) int {
+				return len(a.Message) - len(b.Message)
+			})
+
+			assert.Equal(t, tc.expected, actual)
 		})
 	}
 }
@@ -788,6 +841,9 @@ func TestProperties(t *testing.T) {
 		_, ok := completions.([]protocol.CompletionItem)
 		assert.True(t, ok)
 
-		runDiagnostics()
+		diagnostics := runDiagnostics()
+		for _, d := range diagnostics {
+			assert.NotContains(t, "[system_error] could not read whole JSON", d.Message)
+		}
 	})
 }

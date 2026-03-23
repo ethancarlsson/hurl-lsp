@@ -3,3 +3,5 @@ hurl-lsp
 .hurl-ls.json
 pkg/rawjson/testdata
 pkg/openapi/testdata
+testdata
+debug.*

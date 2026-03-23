@@ -1,7 +1,7 @@
 POST {{host}}/user
 {
 	"firstName": "John",
-	"id": 123,
+	"id":  {{id}},
 	"lastName": "Doe",
 	"pets": [
 		{ 

@@ -73,6 +73,11 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 		return diagnostics
 	}
 
+	reqBody = rawjson.CleanVariables(reqBody)
+	reqBody = rawjson.CleanTrailingCommas(reqBody)
+
+	bodyLines = strings.Split(reqBody, "\n")
+
 	if err := json.Unmarshal([]byte(reqBody), &struct{}{}); err != nil {
 		var syntaxErr *json.SyntaxError
 		isSyntax := errors.As(err, &syntaxErr)
@@ -96,9 +101,6 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 
 	var alreadyProvidedProps map[string]json.RawMessage
 
-	reqBody = rawjson.CleanTrailingCommas(reqBody)
-	reqBody = rawjson.CleanVariables(reqBody)
-
 	if err := json.Unmarshal([]byte(reqBody), &alreadyProvidedProps); err != nil {
 		return diagnostics
 	}
@@ -115,9 +117,22 @@ func addReqBodyDiagnostics(diagnostics []protocol.Diagnostic, req hurlfile.Reque
 		objPath := diagnostic.RangePath()
 
 		pathRange, err := rawjson.PathToRange(bodyLines, objPath)
+
+		// Check if the path is actually a replaced variable. If the user
+		// provides [[7]] to a property where the expected type is not an array,
+		// they won't get diagnostics. It's a pretty unusual scenario though.
+		if pathRange.Start.Line == pathRange.End.Line && len(bodyLines) > 0 {
+			firstLine := bodyLines[pathRange.Start.Line]
+
+			areColsInLine := pathRange.Start.Col >= 0 && len(firstLine) >= pathRange.End.Col+1
+			if areColsInLine && rawjson.HasReplacedVariable(firstLine[pathRange.Start.Col:pathRange.End.Col+1]) {
+				continue
+			}
+		}
+
 		additionalPathErr := ""
 		if err != nil {
-			additionalPathErr = fmt.Sprintf(". [note] could not read whole JSON: %s", err.Error())
+			additionalPathErr = fmt.Sprintf(". [system_error] could not read whole JSON: %s", err.Error())
 		}
 
 		diagnostics = append(diagnostics, protocol.Diagnostic{
