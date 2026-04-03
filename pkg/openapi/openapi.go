@@ -131,6 +131,73 @@ func (o OAI) PathList() []string {
 	return paths
 }
 
+func (o OAI) UriChildPaths(path string, segmentPos int) []string {
+	if len(o.Paths) == 0 {
+		return []string{}
+	}
+
+	paths := make([]string, 0, len(o.Paths))
+
+	justPath := strings.SplitN(path, "?", 2)[0]
+	justPath = strings.SplitN(justPath, "#", 2)[0]
+	segments := strings.Split(justPath, "/")
+	earliestIndx := len(segments)
+
+	for path := range o.Paths {
+		oaiSegs := strings.Split(path, "/")
+		if len(oaiSegs) == 0 {
+			continue
+		}
+
+		firstSeg := oaiSegs[1]
+		indx := slices.Index(segments, firstSeg)
+		if indx != -1 && indx < earliestIndx {
+			earliestIndx = indx
+		}
+	}
+
+	if earliestIndx == len(segments) {
+		for p := range o.Paths {
+			paths = append(paths, p)
+		}
+
+		return paths
+	}
+
+	if segmentPos+1 >= len(segments) {
+		segmentPos = len(segments) - 1
+	}
+
+	if segmentPos < earliestIndx {
+		return []string{}
+	}
+
+	justPath = "/" + strings.Join(segments[earliestIndx:segmentPos+1], "/")
+
+	for p := range o.Paths {
+		splitP := strings.Split(p, "/")
+		splitJustPath := strings.Split(justPath, "/")
+		for i, segment := range splitP {
+			if !paramRe.Match([]byte(segment)) {
+				continue
+			}
+
+			if i < len(splitJustPath) {
+				splitJustPath[i] = segment
+			}
+		}
+
+		pathToCheck := strings.Join(splitJustPath, "/")
+
+		child := strings.TrimPrefix(p, pathToCheck)
+		if child != "" && child != p {
+			paths = append(paths, child)
+		}
+	}
+
+	return paths
+}
+
 func (o OAI) ChildPaths(op Op) []string {
 	if len(o.Paths) == 0 {
 		return []string{}

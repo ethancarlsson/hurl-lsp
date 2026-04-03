@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/ethancarlsson/hurl-lsp/pkg/expect"
 	"github.com/ethancarlsson/hurl-lsp/pkg/openapi"
+	"pgregory.net/rapid"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -258,5 +261,200 @@ func TestSchemaCombined(t *testing.T) {
 				Type: openapi.MParsedV("integer"),
 			}),
 		})
+	})
+}
+
+func TestPathListExcludingProvidedPath(t *testing.T) {
+	t.Run("properties", func(t *testing.T) {
+		rapid.Check(t, func(t *rapid.T) {
+			reOaiPath := `^\/(\{[\w-]+\}/|[a-zA-Z0-9._~-]+/)+$`
+			rePath := `^\/(\{\{[\w-]+\}\}/|[a-zA-Z0-9._~-]+/)+$`
+			var (
+				paths        = rapid.SliceOfN(rapid.StringMatching(reOaiPath), 1, -1).Draw(t, "paths")
+				pathProvided = rapid.OneOf(
+					rapid.SampledFrom(paths),     // make sure we get some paths in the spec
+					rapid.String(),               // test against some (likely) invalid paths
+					rapid.StringMatching(rePath), // test against some valid paths that might not be int the spec
+				).Draw(t, "pathProvided")
+				base       = rapid.String().Draw(t, "base URL")
+				segmentPos = rapid.OneOf(
+					rapid.Int(),
+					rapid.IntRange(0, strings.Count(pathProvided, "/")),
+				).Draw(t, "segmentPos")
+			)
+			oai := openapi.OAI{
+				Paths: make(map[string]json.RawMessage, len(paths)),
+			}
+
+			for _, p := range paths {
+				oai.Paths[p] = json.RawMessage{}
+			}
+
+			pathInURI := base + pathProvided
+			children := oai.UriChildPaths(pathInURI, segmentPos)
+			assert.NotContains(t, children, pathInURI)
+		})
+	})
+
+	t.Run("if exact match return all child paths", func(t *testing.T) {
+		openapiYaml := `
+paths:
+  /pet:
+    get:
+      summary: Pet
+      operationId: getPet
+      responses:
+        '200':
+          description: successful operation
+  /pet/findByTags:
+    get:
+      summary: find pet by tags
+      operationId: findByTags
+      responses:
+        '200':
+          description: successful operation
+  /notpet/findByTags:
+    get:
+      summary: find pet by tags
+      operationId: findByTags
+      responses:
+        '200':
+          description: successful operation
+  /pet/findByStatus:
+    get:
+      summary: Finds Pets by status.
+      description: 
+        - an array for some reason
+      operationId: findPetsByStatus
+      responses:
+        '200':
+          description: successful operation
+        '400':
+          description: Invalid status value
+        default:
+          description: Unexpected error`
+
+		oai, err := openapi.Parse("yaml", []byte(openapiYaml))
+		require.NoError(t, err)
+
+		actual := oai.UriChildPaths("{{url}}/pet/", 2)
+		slices.Sort(actual)
+		assert.Equal(t, []string{"findByStatus", "findByTags"}, actual)
+	})
+
+	t.Run("if matches everything but template variables returns all child paths", func(t *testing.T) {
+		openapiYaml := `
+paths:
+  /pet/{id}:
+    get:
+      summary: Pet by ID
+      operationId: getPetById
+      responses:
+        '200':
+          description: successful operation
+  /pet/{id}/status:
+    get:
+      summary: Pet status by ID
+      operationId: getPetStatusById
+      responses:
+        '200':
+          description: successful operation
+  /pet:
+    get:
+      summary: Pet
+      operationId: getPet
+      responses:
+        '200':
+          description: successful operation
+  /user/{id}:
+    get:
+      summary: User by ID
+      operationId: getUserById
+      responses:
+        '200':
+          description: successful operation`
+
+		oai, err := openapi.Parse("yaml", []byte(openapiYaml))
+		require.NoError(t, err)
+
+		actual := oai.UriChildPaths("/pet/id123/", 2)
+		slices.Sort(actual)
+		assert.Equal(t, []string{"/status"}, actual)
+	})
+
+	t.Run("ignores fragments and query params", func(t *testing.T) {
+		openapiYaml := `
+paths:
+  /pet:
+    get:
+      summary: Pet
+      operationId: getPet
+      responses:
+        '200':
+          description: successful operation
+  /pet/findByTags:
+    get:
+      summary: find pet by tags
+      operationId: findByTags
+      responses:
+        '200':
+          description: successful operation`
+
+		oai, err := openapi.Parse("yaml", []byte(openapiYaml))
+		require.NoError(t, err)
+
+		actual := oai.UriChildPaths("/pet/#fragment", 1)
+		slices.Sort(actual)
+		assert.Equal(t, []string{"/findByTags"}, actual)
+
+		actual = oai.UriChildPaths("/pet/?query=value", 1)
+		slices.Sort(actual)
+		assert.Equal(t, []string{"/findByTags"}, actual)
+	})
+
+	t.Run("adds completions for partially completed URI", func(t *testing.T) {
+		openapiYaml := `
+paths:
+  /pet:
+    get:
+      summary: Pet
+      operationId: getPet
+      responses:
+        '200':
+          description: successful operation
+  /pet/findByTags:
+    get:
+      summary: find pet by tags
+      operationId: findByTags
+      responses:
+        '200':
+          description: successful operation
+  /notpet/findByTags:
+    get:
+      summary: find pet by tags
+      operationId: findByTags
+      responses:
+        '200':
+          description: successful operation
+  /pet/findByStatus:
+    get:
+      summary: Finds Pets by status.
+      description: 
+        - an array for some reason
+      operationId: findPetsByStatus
+      responses:
+        '200':
+          description: successful operation
+        '400':
+          description: Invalid status value
+        default:
+          description: Unexpected error`
+
+		oai, err := openapi.Parse("yaml", []byte(openapiYaml))
+		require.NoError(t, err)
+
+		actual := oai.UriChildPaths("{{url}}/pet/fi", 2)
+		slices.Sort(actual)
+		assert.Equal(t, []string{"ndByStatus", "ndByTags"}, actual)
 	})
 }

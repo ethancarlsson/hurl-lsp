@@ -31,8 +31,8 @@ func parseOpenapi() {
 				m.Set("_message", "Could not read openapi file").
 					Set("err", err).Send()
 			}
-			errs = append(errs, err)
-			return
+
+			continue
 		}
 
 		openAPI, err := openapi.Parse(defPath.Ft(), fileContent)
@@ -41,8 +41,8 @@ func parseOpenapi() {
 				m.Set("_message", "Could not parse openapi file").
 					Set("err", err).Send()
 			}
-			errs = append(errs, err)
-			return
+
+			continue
 		}
 
 		combinedOpenapiDef = combinedOpenapiDef.Merge(openAPI)

@@ -134,6 +134,63 @@ func TestCompletion(t *testing.T) {
 		}
 	})
 
+	t.Run("uri completions from openapi half complete uri", func(t *testing.T) {
+		conf.OpenapiDefPaths = []oaiPath{"./fixtures/petstore.yaml"}
+		params := &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{
+					URI: "./fixtures/test_captures.hurl",
+				},
+				Position: protocol.Position{
+					Line:      10,
+					Character: 16,
+				},
+			},
+		}
+
+		parseOpenapi()
+		parseDocument(params.TextDocument.URI)
+
+		is, err := completion(&ctx, params)
+		expect.NoErr(t, err)
+
+		items := is.([]protocol.CompletionItem)
+		// 4 paths + the 2 captured variables
+		assert.Len(t, items, 6)
+	})
+
+	t.Run("uri completions inside last segment", func(t *testing.T) {
+		conf.OpenapiDefPaths = []oaiPath{"./fixtures/petstore.yaml"}
+		params := &protocol.CompletionParams{
+			TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+				TextDocument: protocol.TextDocumentIdentifier{
+					URI: "./fixtures/test_captures.hurl",
+				},
+				Position: protocol.Position{
+					Line:      5,
+					Character: 18,
+				},
+			},
+		}
+
+		parseOpenapi()
+		parseDocument(params.TextDocument.URI)
+
+		is, err := completion(&ctx, params)
+		expect.NoErr(t, err)
+
+		items := is.([]protocol.CompletionItem)
+		// 4 paths + the 2 captured variables
+		// assert.Len(t, items, 6)
+		comps := make([]string, 0, len(items))
+		for _, item := range items {
+			comps = append(comps, item.Label)
+		}
+
+		slices.Sort(comps)
+		assert.Equal(t, comps, []string{"/uploadImage", "id"})
+	})
+
 	t.Run("request body completions", func(t *testing.T) {
 		conf.OpenapiDefPaths = []oaiPath{"./fixtures/petstore.yaml"}
 		params := &protocol.CompletionParams{

@@ -39,8 +39,7 @@ var (
 	version string = "0.0.1"
 	handler protocol.Handler
 
-	conf config  = config{}
-	errs []error = []error{}
+	conf config = config{}
 )
 
 func main() {
@@ -108,8 +107,20 @@ func documentDidSave(context *glsp.Context, params *protocol.DidSaveTextDocument
 }
 
 func initialize(context *glsp.Context, params *protocol.InitializeParams) (any, error) {
+	if m, ok := params.InitializationOptions.(map[string]interface{}); ok {
+		if defs, ok := m["openapi_def"].([]interface{}); ok {
+			oaiPaths := make([]oaiPath, 0, len(defs))
+			for _, def := range defs {
+				if s, ok := def.(string); ok {
+					oaiPaths = append(oaiPaths, oaiPath(s))
+				}
+			}
+			conf.OpenapiDefPaths = oaiPaths
+		}
+	}
+
 	capabilities := handler.CreateServerCapabilities()
-	capabilities.CompletionProvider.TriggerCharacters = []string{`"`}
+	capabilities.CompletionProvider.TriggerCharacters = []string{`"`, `/`}
 
 	return protocol.InitializeResult{
 		Capabilities: capabilities,
@@ -123,16 +134,31 @@ func initialize(context *glsp.Context, params *protocol.InitializeParams) (any, 
 func initialized(context *glsp.Context, params *protocol.InitializedParams) error {
 	contents, err := os.ReadFile("./.hurl-ls.json")
 	if err != nil {
-		// do nothing if there's an error because it's not really needed
-		return nil
+		// do nothing if there's an error
+		contents = []byte("{}")
 	}
 
-	if err := json.Unmarshal(contents, &conf); err != nil {
-		return err
+	var localConf config
+
+	if err := json.Unmarshal(contents, &localConf); err != nil {
+		// do nothing
+	}
+
+	for _, path := range localConf.OpenapiDefPaths {
+		conf.OpenapiDefPaths = append(conf.OpenapiDefPaths, path)
 	}
 
 	if len(conf.OpenapiDefPaths) == 0 {
 		return nil
+	}
+
+	deduppedPaths := make(map[oaiPath]struct{})
+	for _, p := range conf.OpenapiDefPaths {
+		deduppedPaths[p] = struct{}{}
+	}
+	conf.OpenapiDefPaths = make([]oaiPath, 0, len(deduppedPaths))
+	for p := range deduppedPaths {
+		conf.OpenapiDefPaths = append(conf.OpenapiDefPaths, p)
 	}
 
 	parseOpenapi()

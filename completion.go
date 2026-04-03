@@ -146,19 +146,29 @@ func addBodyCompletions(hf *hurlfile.HurlFile, items []protocol.CompletionItem, 
 	return items
 }
 
+func getSegmentIdxFromPos(uri string, posInURI int) int {
+	charCount := 0
+	segments := strings.Split(uri, "/")
+
+	for segmentIndex, segment := range segments {
+		charCount += 1 + len(segment)
+		if posInURI < charCount {
+			return segmentIndex
+		}
+	}
+
+	return len(segments) - 1
+
+}
+
 func addUriCompletions(hf *hurlfile.HurlFile, items []protocol.CompletionItem, op openapi.Op, line, col int) []protocol.CompletionItem {
-	if !hf.OnUri(line, col) {
+	uri, posInURI := hf.GetUri(line, col)
+	if uri == "" {
 		return items
 	}
 
-	if op.NotDocumented() {
-		items = completions.AddPaths(items, state.OAI().PathList())
-
-		// nothing else can be done with this if it's not documented
-		return items
-	} else {
-		items = completions.AddPaths(items, state.OAI().ChildPaths(op))
-	}
+	childPaths := state.OAI().UriChildPaths(uri, getSegmentIdxFromPos(uri, posInURI))
+	items = completions.AddPaths(items, childPaths)
 
 	items = completions.AddParams(items, op.Detail.Parameters.In("query").ToDocMap())
 

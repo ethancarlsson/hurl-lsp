@@ -45,6 +45,22 @@ func (hf HurlFile) OnUri(line, col int) bool {
 	return false
 }
 
+func (hf HurlFile) GetUri(line, col int) (uri string, posInURI int) {
+	for _, entry := range hf.Entries {
+		req := entry.Request
+		if line != req.Range.StartLine {
+			continue
+		}
+
+		if col > req.Method.Range.EndCol {
+			println("col", col, "targetStart", req.Target.Range.StartCol, "posINURI", (col-req.Target.Range.StartCol)-1)
+			return req.Target.Target, (col - req.Target.Range.StartCol) - 1
+		}
+	}
+
+	return "", 0
+}
+
 func (hf HurlFile) OnRespSectionName(line, col int) bool {
 	for _, entry := range hf.Entries {
 		if entry.Response == nil {
